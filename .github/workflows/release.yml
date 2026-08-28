@@ -27,8 +27,8 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/what-to-eat-today:${{ github.ref_name }}
-            ${{ secrets.DOCKERHUB_USERNAME }}/what-to-eat-today:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/WhatEat:${{ github.ref_name }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/WhatEat:latest
 
       - name: 创建 GitHub Release
         uses: softprops/action-gh-release@v2
