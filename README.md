@@ -49,7 +49,7 @@ services:
     image: whateat:latest       # 本地镜像名称
     container_name: whateat     # 容器名称
     ports:
-      - "127.0.0.1:8765:8765"   # 映射端口（仅本机可访问）
+      - "8765:8765"             # 映射端口
     volumes:
       - recipe_data:/app/data   # 数据持久化卷
     restart: unless-stopped     # 异常时自动重启
@@ -87,17 +87,9 @@ docker run --rm -v whateat_recipe_data:/data -v $(pwd):/backup alpine tar xzf /b
 2. 点击「服务器版本」按钮检测更新
 3. 发现新版本时，管理员可点击「在线更新」一键拉取最新镜像并重启服务
 
-发布流程：
-```bash
-git tag v0.0.2
-git push origin v0.0.2
-```
-
-推送 Tag 后，GitHub Actions 自动构建镜像并推送到 Docker Hub。
 
 ## 安全说明
 
-- 默认仅允许本机访问（`127.0.0.1:8765`）
 - 如需外网访问，建议使用 Nginx 反代 + HTTPS
 - 数据库密钥自动生成，重启后不变
 - 密码使用 bcrypt 加密存储
