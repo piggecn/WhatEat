@@ -1,0 +1,442 @@
+{% extends "base.html" %}
+{% block title %}管理中心 · 今天吃点啥{% endblock %}
+
+{% block content %}
+<div x-data="adminPage()" x-init="activeTab = '{{ tab }}' || 'users';
+  settingsForm = {
+    public_base_url: `{{ settings.public_base_url }}`.replace(/&amp;/g,'&'),
+    site_name: `{{ settings.site_name }}`.replace(/&amp;/g,'&'),
+    pixabay_api_key: `{{ settings.pixabay_api_key }}`.replace(/&amp;/g,'&'),
+    image_provider: `{{ settings.image_provider }}` || 'pixabay',
+    proxy_url: `{{ settings.proxy_url }}`.replace(/&amp;/g,'&'),
+    proxy_test_url: `{{ settings.proxy_test_url }}`.replace(/&amp;/g,'&'),
+    login_bg_image: `{{ settings.login_bg_image }}`.replace(/&amp;/g,'&'),
+    recipe_source: `{{ settings.recipe_source }}` || 'themealdb',
+    recipe_translate: `{{ settings.recipe_translate }}` || '1',
+  }; saveMsg=''; saveErr='';
+  proxyTestSel = ['https://pixabay.com/api/docs/','https://commons.wikimedia.org/w/api.php?action=query&meta=siteinfo','https://www.google.com','https://github.com','https://www.baidu.com'].indexOf(settingsForm.proxy_test_url) >= 0 ? settingsForm.proxy_test_url : '__custom__';
+  proxyCustom = proxyTestSel === '__custom__';
+">
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+      <div>
+        <h1 class="fr-h1 mb-1">管理中心</h1>
+        <p class="fr-body text-muted-foreground">家庭成员账号、系统设置、数据备份一站式管理</p>
+      </div>
+      <button x-show="activeTab === 'users'" @click="openAdd()" class="fr-btn fr-btn-primary self-start sm:self-auto">
+        <i data-lucide="user-plus" class="w-5 h-5"></i>
+        添加用户
+      </button>
+    </div>
+
+    <!-- 顶部 Tab -->
+    <div class="flex items-center gap-1 overflow-x-auto border-b border-border mb-6 no-scrollbar">
+      <button @click="activeTab='users'" :class="activeTab==='users' ? 'border-[var(--fr-primary)] text-primary -mb-px' : 'border-transparent text-muted-foreground hover:text-foreground'"
+              class="border-b-2 px-5 py-3 fr-body whitespace-nowrap transition-colors">
+        <span class="inline-flex items-center gap-2"><i data-lucide="users" class="w-4 h-4"></i>家庭成员</span>
+      </button>
+      <button @click="activeTab='settings'" :class="activeTab==='settings' ? 'border-[var(--fr-primary)] text-primary -mb-px' : 'border-transparent text-muted-foreground hover:text-foreground'"
+              class="border-b-2 px-5 py-3 fr-body whitespace-nowrap transition-colors">
+        <span class="inline-flex items-center gap-2"><i data-lucide="settings-2" class="w-4 h-4"></i>系统设置</span>
+      </button>
+      <button @click="activeTab='api'" :class="activeTab==='api' ? 'border-[var(--fr-primary)] text-primary -mb-px' : 'border-transparent text-muted-foreground hover:text-foreground'"
+              class="border-b-2 px-5 py-3 fr-body whitespace-nowrap transition-colors">
+        <span class="inline-flex items-center gap-2"><i data-lucide="plug-zap" class="w-4 h-4"></i>API 管理</span>
+      </button>
+      <button @click="activeTab='backup'" :class="activeTab==='backup' ? 'border-[var(--fr-primary)] text-primary -mb-px' : 'border-transparent text-muted-foreground hover:text-foreground'"
+              class="border-b-2 px-5 py-3 fr-body whitespace-nowrap transition-colors">
+        <span class="inline-flex items-center gap-2"><i data-lucide="database-backup" class="w-4 h-4"></i>数据备份</span>
+      </button>
+    </div>
+
+    <!-- ========== Tab1: 家庭成员 ========== -->
+    <div x-show="activeTab === 'users'" x-transition:enter="transition ease-out duration-150">
+      {% if users %}
+      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+        {% for u in users %}
+        <div class="fr-card p-5 flex items-center gap-4">
+          {{ avatar_html(u.avatar, u.display_name, u.username, 56) | safe }}
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-1">
+              <h3 class="fr-h3 truncate">{{ u.display_name or u.username }}</h3>
+              {% if u.is_admin %}
+              <span class="fr-tag shrink-0">管理员</span>
+              {% else %}
+              <span class="fr-tag fr-tag-neutral shrink-0">成员</span>
+              {% endif %}
+            </div>
+            <p class="fr-caption text-muted-foreground">账户：{{ u.username }}</p>
+            <p class="fr-caption text-muted-foreground mt-1">创建于 {{ u.created_at }}</p>
+          </div>
+          {% if not u.is_admin %}
+          <button @click="askDelete({{ u.id }}, '{{ u.username }}')" class="fr-btn fr-btn-ghost w-9 h-9 p-0 rounded-full hover:text-red-600 hover:bg-red-50" aria-label="删除">
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+          </button>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="text-center py-20">
+        <div class="w-20 h-20 rounded-full bg-muted flex items-center justify-center mb-5 mx-auto">
+          <i data-lucide="users" class="w-10 h-10 text-muted-foreground"></i>
+        </div>
+        <h2 class="fr-h2 mb-2">还没有用户</h2>
+        <p class="fr-body text-muted-foreground mb-6 max-w-sm mx-auto">点击「添加用户」创建第一个家庭成员账号。</p>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- ========== Tab2: 系统设置 ========== -->
+    <div x-show="activeTab === 'settings'" x-cloak x-transition:enter="transition ease-out duration-150" class="fr-card p-5 sm:p-6">
+      <h2 class="fr-h2 mb-5 flex items-center gap-2"><i data-lucide="settings-2" class="w-5 h-5 text-primary"></i>系统设置</h2>
+      <form class="space-y-5" @submit.prevent="saveSettings()">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div class="md:col-span-2">
+            <label class="fr-label block mb-2">🌐 服务器对外地址（PUBLIC_BASE_URL）</label>
+            <input type="url" x-model="settingsForm.public_base_url" placeholder="https://food.example.com" required pattern="https?://.+" class="fr-input w-full">
+            <p class="fr-caption text-muted-foreground mt-2">给 Android 客户端拼绝对 URL、CORS 白名单、Cookie 域名安全都依赖这个地址。建议用 https 反代域名。</p>
+          </div>
+          <div>
+            <label class="fr-label block mb-2">网站显示名</label>
+            <input type="text" x-model="settingsForm.site_name" placeholder="今天吃点啥" class="fr-input w-full">
+          </div>
+          <div class="md:col-span-2">
+            <label class="fr-label block mb-2">🖼 登录页背景图</label>
+            <div class="flex flex-col sm:flex-row gap-4 items-start">
+              <div class="relative w-full sm:w-64 shrink-0">
+                <template x-if="settingsForm.login_bg_image">
+                  <div class="relative rounded-2xl overflow-hidden border border-border aspect-[16/9] shadow-sm group">
+                    <img :src="settingsForm.login_bg_image" class="w-full h-full object-cover">
+                    <button type="button" @click="settingsForm.login_bg_image=''"
+                            class="z-30 absolute top-2 right-2 w-8 h-8 rounded-full bg-white border border-border shadow-md hover:bg-red-50 hover:text-red-600 hover:border-red-200 flex items-center justify-center text-foreground transition-all">
+                      <i data-lucide="x" class="w-4 h-4"></i>
+                    </button>
+                  </div>
+                </template>
+                <template x-if="!settingsForm.login_bg_image">
+                  <div class="rounded-2xl border-2 border-dashed border-border bg-muted/30 aspect-[16/9] flex items-center justify-center text-muted-foreground fr-caption">
+                    暂无背景图
+                  </div>
+                </template>
+              </div>
+              <div class="flex flex-wrap gap-2 flex-1">
+                <button type="button" @click="loginBg.open = !loginBg.open; if(loginBg.open){ loginBg.keyword = settingsForm.site_name || '美食' }"
+                        class="fr-btn fr-btn-secondary h-10">
+                  <i data-lucide="search" class="w-4 h-4"></i>使用找图 API 挑选
+                </button>
+                <label class="fr-btn fr-btn-secondary h-10 cursor-pointer inline-flex items-center gap-1.5">
+                  <i data-lucide="upload" class="w-4 h-4"></i>
+                  <span>上传本地图片</span>
+                  <input type="file" accept="image/*" class="hidden" @change="loginBgUpload($event.target.files[0])">
+                </label>
+                <button type="button" @click="loginBg.manualMode=!loginBg.manualMode; loginBg.open=true" class="fr-btn fr-btn-ghost h-10">
+                  <i data-lucide="link-2" class="w-4 h-4"></i>填写图片链接
+                </button>
+              </div>
+            </div>
+
+            <!-- 登录背景图：找图/手动链接 弹层（复用 edit 找图 API，per_page=9 + 翻页） -->
+            <div x-show="loginBg.open" x-transition class="mt-4 rounded-2xl border border-border bg-muted/30 p-4">
+              <div class="flex items-center justify-between mb-3">
+                <p class="fr-body font-medium">为登录页挑一张背景图</p>
+                <button type="button" @click="loginBg.open=false" class="w-8 h-8 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground">
+                  <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+              </div>
+              <div class="flex items-center gap-2 mb-3">
+                <input type="text" x-model="loginBg.keyword" @keydown.enter.prevent="loginBgSearch(1)"
+                       placeholder="搜索登录页背景，如：美食厨房、温馨餐桌、中式餐厅、阳光早餐"
+                       class="fr-input flex-1 h-10">
+                <button type="button" @click="loginBgSearch(1)" :disabled="loginBg.loading"
+                        class="fr-btn fr-btn-primary h-10 disabled:opacity-60 shrink-0">
+                  <i data-lucide="search" class="w-4 h-4"></i>
+                  <span x-show="!loginBg.loading">搜索</span>
+                  <span x-show="loginBg.loading">搜索中…</span>
+                </button>
+              </div>
+              <div x-show="loginBg.loading" class="py-5 text-center fr-body text-muted-foreground">搜索中…</div>
+              <div x-show="!loginBg.loading && loginBg.results.length>0"
+                   class="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                <template x-for="(img,i) in loginBg.results" :key="i">
+                  <button type="button" @click="settingsForm.login_bg_image=img.url; loginBg.open=false;"
+                          class="relative aspect-video rounded-lg overflow-hidden border border-border hover:border-[var(--fr-primary)] hover:ring-2 hover:ring-[var(--fr-primary)]/30 transition-all">
+                    <img :src="img.thumb || img.url" class="w-full h-full object-cover">
+                  </button>
+                </template>
+              </div>
+              <!-- 分页 -->
+              <div x-show="!loginBg.loading && loginBg.results.length>0"
+                   class="flex items-center justify-between mt-3 pt-3 border-t border-border">
+                <p class="fr-caption text-muted-foreground">第 <span x-text="loginBg.page"></span> 页 · 每页 9 张</p>
+                <div class="flex items-center gap-2">
+                  <button type="button" @click="loginBgSearch(loginBg.page-1)"
+                          :disabled="loginBg.page<=1 || loginBg.loading"
+                          class="fr-btn fr-btn-ghost h-9 disabled:opacity-50"><i data-lucide="chevron-left" class="w-4 h-4"></i>上一页</button>
+                  <button type="button" @click="loginBgSearch(loginBg.page+1)"
+                          :disabled="loginBg.results.length<9 || loginBg.loading"
+                          class="fr-btn fr-btn-ghost h-9 disabled:opacity-50">下一页<i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+                </div>
+              </div>
+              <div class="mt-3 pt-3 border-t border-border">
+                <button type="button" @click="loginBg.manualMode = !loginBg.manualMode" class="fr-caption text-primary hover:underline">
+                  <span x-text="loginBg.manualMode ? '↑ 收起链接输入' : '↓ 直接填写图片链接'"></span>
+                </button>
+                <div x-show="loginBg.manualMode" x-transition class="mt-2 flex gap-2">
+                  <input type="url" x-model="loginBg.manualUrl" placeholder="https://..." class="fr-input flex-1 h-10">
+                  <button type="button" :disabled="!loginBg.manualUrl.trim()"
+                          @click="settingsForm.login_bg_image=loginBg.manualUrl.trim(); loginBg.open=false;"
+                          class="fr-btn fr-btn-primary h-10 disabled:opacity-60">使用</button>
+                </div>
+              </div>
+              <p x-show="loginBg.uploading" x-cloak class="mt-3 fr-caption text-muted-foreground">上传中…</p>
+            </div>
+            <p class="fr-caption text-muted-foreground mt-2">留空则使用默认橙色渐变背景。推荐 16:9 横图，≥ 1920×1080。</p>
+          </div>
+        </div>
+
+        <p x-show="saveMsg" x-cloak x-text="saveMsg" class="fr-body text-[var(--fr-state-success)] bg-[var(--fr-state-success-soft)] rounded-lg px-4 py-3 border border-emerald-200 flex items-center gap-2">
+          <i data-lucide="check-circle" class="w-5 h-5"></i>
+        </p>
+        <p x-show="saveErr" x-cloak x-text="saveErr" class="fr-body text-[var(--fr-state-error)] bg-red-50 rounded-lg px-4 py-3 border border-red-200"></p>
+
+        <div class="flex items-center justify-end gap-3 pt-2 border-t border-border mt-6">
+          <button type="submit" :disabled="saving" class="fr-btn fr-btn-primary disabled:opacity-60">
+            <i data-lucide="save" class="w-5 h-5"></i>
+            <span x-show="!saving">保存设置</span>
+            <span x-show="saving">保存中…</span>
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- ========== Tab3: API 管理 ========== -->
+    <div x-show="activeTab === 'api'" x-cloak x-transition:enter="transition ease-out duration-150" class="fr-card p-5 sm:p-6">
+      <h2 class="fr-h2 mb-1 flex items-center gap-2"><i data-lucide="plug-zap" class="w-5 h-5 text-primary"></i>API 管理</h2>
+      <p class="fr-body text-muted-foreground mb-5">配置「找图」所用的外部图片 API：API Key、默认搜索渠道，以及访问外网所需的代理。</p>
+      <form class="space-y-5" @submit.prevent="saveSettings()">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <!-- Pixabay -->
+          <div class="md:col-span-2 rounded-xl border border-border p-4 sm:p-5">
+            <h3 class="fr-h3 mb-1">Pixabay 图片搜索</h3>
+            <p class="fr-caption text-muted-foreground mb-3">免费图片库，需申请 API Key（免费）。中英文都能搜，中文菜名会自动翻译成英文再召回。</p>
+            <label class="fr-label block mb-2">
+              API Key
+              <a href="https://pixabay.com/api/docs/" target="_blank" rel="noopener noreferrer"
+                 class="text-primary underline underline-offset-2 inline-flex items-center gap-1 ml-2 text-sm font-normal">
+                <i data-lucide="external-link" class="w-3.5 h-3.5"></i>去官网免费注册获取
+              </a>
+            </label>
+            <input type="text" x-model="settingsForm.pixabay_api_key" placeholder="填 Pixabay API Key" class="fr-input w-full">
+          </div>
+
+          <!-- Wikimedia -->
+          <div class="md:col-span-2 rounded-xl border border-border p-4 sm:p-5">
+            <h3 class="fr-h3 mb-1">Wikimedia Commons</h3>
+            <p class="fr-caption text-muted-foreground mb-3">维基共享资源，无需 API Key，直接可用；图片多为 CC 大图。国内直连可能超时，建议配合下方「代理」使用。</p>
+            <div class="flex flex-wrap items-center gap-2">
+              <a href="https://commons.wikimedia.org/w/api.php" target="_blank" rel="noopener noreferrer" class="fr-btn fr-btn-secondary h-9 text-sm">
+                <i data-lucide="external-link" class="w-4 h-4"></i>查看 API 文档
+              </a>
+              <span class="fr-caption text-muted-foreground">无需注册 / 免费</span>
+            </div>
+          </div>
+
+          <!-- 图片搜索渠道 -->
+          <div class="md:col-span-2 rounded-xl border border-border p-4 sm:p-5">
+            <h3 class="fr-h3 mb-1">默认搜索渠道</h3>
+            <p class="fr-caption text-muted-foreground mb-3">新增食谱「找图」时默认使用的渠道；编辑页内也可临时切换。</p>
+            <div class="relative">
+              <select x-model="settingsForm.image_provider" class="fr-input w-full appearance-none pr-10">
+                <option value="pixabay">Pixabay（英文 API，推荐 + 翻译召回）</option>
+                <option value="pixabay_zh">Pixabay 中文（pixabay.com/zh，中文菜名直接搜）</option>
+                <option value="wikimedia">Wikimedia Commons（无需 Key，适合 CC 大图）</option>
+              </select>
+              <i data-lucide="chevron-down" class="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none"></i>
+            </div>
+          </div>
+
+          <!-- 代理 -->
+          <div class="md:col-span-2 rounded-xl border border-border p-4 sm:p-5">
+            <h3 class="fr-h3 mb-1">代理设置</h3>
+            <p class="fr-caption text-muted-foreground mb-3">访问外网 API（尤其 Wikimedia）在部分地区不稳定，可填代理。支持 http / https / socks5 / socks5h。</p>
+            <div class="relative mb-3">
+              <input type="text" x-model="settingsForm.proxy_url" placeholder="http://127.0.0.1:7890  或 socks5h://127.0.0.1:7891" class="fr-input w-full pr-28">
+              <button type="button" @click="runProxyTest()" :disabled="proxyTest.loading"
+                      class="absolute right-2 top-1/2 -translate-y-1/2 h-8 px-3 rounded-lg fr-btn-secondary inline-flex items-center gap-1 disabled:opacity-60">
+                <i data-lucide="zap" class="w-3.5 h-3.5"></i>
+                <span x-show="!proxyTest.loading">测试</span>
+                <span x-show="proxyTest.loading">测…</span>
+              </button>
+            </div>
+            <label class="fr-label block mb-2">🎯 代理测试目标 URL（选择）</label>
+            <div class="relative">
+              <select x-model="proxyTestSel" @change="onProxyTestSel()" class="fr-input w-full appearance-none pr-10">
+                <option value="https://pixabay.com/api/docs/">Pixabay API 文档</option>
+                <option value="https://commons.wikimedia.org/w/api.php?action=query&meta=siteinfo">Wikimedia Commons API</option>
+                <option value="https://www.google.com">Google</option>
+                <option value="https://github.com">GitHub</option>
+                <option value="https://www.baidu.com">百度</option>
+                <option value="__custom__">自定义…</option>
+              </select>
+              <i data-lucide="chevron-down" class="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none"></i>
+            </div>
+            <input x-show="proxyCustom" x-transition type="url" x-model="settingsForm.proxy_test_url" placeholder="https://..." class="fr-input w-full mt-2">
+            <p x-show="proxyTest.msg" x-cloak
+               :class="proxyTest.ok ? 'text-[var(--fr-state-success)]' : 'text-[var(--fr-state-error)]'"
+               class="fr-caption mt-2">
+              <span x-text="proxyTest.msg"></span>
+            </p>
+            <p class="fr-caption text-muted-foreground mt-1">⚠ 若服务运行在 Docker 容器内，代理地址不能用 <code class="px-1.5 py-0.5 bg-muted rounded">127.0.0.1</code>（那是容器自身）。请填宿主机局域网 IP（如 <code class="px-1.5 py-0.5 bg-muted rounded">http://192.168.1.10:7890</code>）或 <code class="px-1.5 py-0.5 bg-muted rounded">host.docker.internal</code>。</p>
+          </div>
+
+          <!-- 食谱 API（无 Key） -->
+          <div class="md:col-span-2 rounded-xl border border-border p-4 sm:p-5">
+            <h3 class="fr-h3 mb-1">食谱 API（导入菜谱）</h3>
+            <p class="fr-caption text-muted-foreground mb-3">编辑页新增「导入菜谱」：搜索外部菜谱 / 粘贴文字，一键转成可编辑菜谱。当前为无 Key 免费方案。</p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="fr-label block mb-2">默认数据源</label>
+                <div class="relative">
+                  <select x-model="settingsForm.recipe_source" class="fr-input w-full appearance-none pr-10">
+                    <option value="themealdb">TheMealDB（无需 Key，免费）</option>
+                  </select>
+                  <i data-lucide="chevron-down" class="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none"></i>
+                </div>
+                <p class="fr-caption text-muted-foreground mt-2">其余菜谱（如小红书）用编辑页的「粘贴导入」即可，无需任何 API。</p>
+              </div>
+              <div>
+                <label class="fr-label block mb-2">英转中（英文菜谱自动转中文）</label>
+                <label class="inline-flex items-center gap-2 cursor-pointer fr-body">
+                  <input type="checkbox"
+                         :checked="settingsForm.recipe_translate === '1'"
+                         @change="settingsForm.recipe_translate = $event.target.checked ? '1' : '0'"
+                         class="w-4 h-4 accent-[var(--fr-primary)]">
+                  <span>开启（免费词典 + MyMemory 翻译）</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <p x-show="saveMsg" x-cloak x-text="saveMsg" class="fr-body text-[var(--fr-state-success)] bg-[var(--fr-state-success-soft)] rounded-lg px-4 py-3 border border-emerald-200 flex items-center gap-2">
+          <i data-lucide="check-circle" class="w-5 h-5"></i>
+        </p>
+        <p x-show="saveErr" x-cloak x-text="saveErr" class="fr-body text-[var(--fr-state-error)] bg-red-50 rounded-lg px-4 py-3 border border-red-200"></p>
+
+        <div class="flex items-center justify-end gap-3 pt-2 border-t border-border mt-6">
+          <button type="submit" :disabled="saving" class="fr-btn fr-btn-primary disabled:opacity-60">
+            <i data-lucide="save" class="w-5 h-5"></i>
+            <span x-show="!saving">保存设置</span>
+            <span x-show="saving">保存中…</span>
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- ========== Tab4: 数据备份 ========== -->
+    <div x-show="activeTab === 'backup'" x-cloak x-transition:enter="transition ease-out duration-150"
+         x-data="{ importing: false, importMode: 'merge', importMsg: '', importErr: '', async doExport() { try { const token = localStorage.getItem('recipe_token'); const res = await fetch('/api/data/export', { headers: { 'Authorization': 'Bearer ' + token } }); const blob = await res.blob(); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; const today = new Date().toISOString().slice(0,10); a.download = 'recipe-backup-' + today + '.json'; a.click(); URL.revokeObjectURL(url); } catch(e) { alert('导出失败: ' + e.message); } }, async doImport(file) { if(!file) return; this.importing = true; this.importMsg = ''; this.importErr = ''; try { const token = localStorage.getItem('recipe_token'); const fd = new FormData(); fd.append('file', file); const res = await fetch('/api/data/import?mode=' + this.importMode, { method: 'POST', headers: { 'Authorization': 'Bearer ' + token }, body: fd }); const data = await res.json(); if(!res.ok) throw new Error(data.detail || '导入失败'); this.importMsg = '导入完成：新增 ' + data.imported + ' 个食谱' + (data.skipped ? '，跳过 ' + data.skipped + ' 个重复' : ''); } catch(e) { this.importErr = e.message; } finally { this.importing = false; if(this.$refs.fileInput) this.$refs.fileInput.value = ''; } } }">
+      <div class="fr-card p-5 sm:p-6">
+        <h2 class="fr-h2 mb-5 flex items-center gap-2"><i data-lucide="database-backup" class="w-5 h-5 text-primary"></i>数据备份与恢复</h2>
+        <p class="fr-body text-muted-foreground mb-5">导出全部数据为 JSON 文件，换机或重装后一键恢复。包含：账号、系统设置、全部食谱（食材/步骤）、收藏、用餐记录、日历预定。仅管理员可操作。</p>
+
+        <div class="flex items-center gap-3 mb-6 pb-6 border-b border-border">
+          <button type="button" @click="doExport()" class="fr-btn fr-btn-primary">
+            <i data-lucide="download" class="w-4 h-4"></i>导出全部数据
+          </button>
+          <span class="fr-caption text-muted-foreground">下载 JSON 备份文件（含食谱 / 食材 / 步骤 / 收藏 / 用餐记录 / 日历预定）</span>
+        </div>
+
+        <div class="space-y-4">
+          <div>
+            <label class="fr-label block mb-2">导入模式</label>
+            <div class="flex flex-wrap gap-4">
+              <label class="flex items-center gap-2 cursor-pointer fr-body">
+                <input type="radio" value="merge" x-model="importMode" class="w-4 h-4 accent-[var(--fr-primary)]">
+                <span>合并导入（跳过已存在的同名食谱）</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer fr-body">
+                <input type="radio" value="replace" x-model="importMode" class="w-4 h-4 accent-[var(--fr-primary)]">
+                <span class="text-red-600">覆盖导入（清空当前用户所有食谱和记录后再恢复）</span>
+              </label>
+            </div>
+          </div>
+          <div class="flex items-center gap-3">
+            <input type="file" x-ref="fileInput" accept=".json" @change="doImport($event.target.files[0])" class="text-sm file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-primary file:text-white file:cursor-pointer">
+            <span x-show="importing" class="fr-caption text-muted-foreground">导入中…</span>
+          </div>
+          <p x-show="importMsg" x-cloak x-text="importMsg" class="fr-body text-[var(--fr-state-success)] bg-[var(--fr-state-success-soft)] rounded-lg px-4 py-3 border border-emerald-200 flex items-center gap-2"></p>
+          <p x-show="importErr" x-cloak x-text="importErr" class="fr-body text-[var(--fr-state-error)] bg-red-50 rounded-lg px-4 py-3 border border-red-200"></p>
+          <p x-show="importMode === 'replace'" class="fr-caption text-red-600">⚠ 覆盖模式会删除全部食谱、收藏、用餐记录和日历预定后恢复（账号保留），请确认已先导出备份。</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- 添加用户弹窗 -->
+  <div x-show="showAdd" x-transition.opacity x-cloak class="fixed inset-0 z-50" aria-modal="true" role="dialog" @keydown.escape.window="closeAdd()">
+    <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="closeAdd()"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+      <div class="bg-card w-full max-w-md rounded-2xl shadow-3 border border-border p-6 relative">
+        <button @click="closeAdd()" class="absolute top-4 right-4 w-8 h-8 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+        <h2 class="fr-h2 mb-1">添加用户</h2>
+        <p class="fr-body text-muted-foreground mb-6">创建新的家庭成员账号。</p>
+        <form class="space-y-5" @submit.prevent="createUser()">
+          <div>
+            <label class="fr-label block mb-2" for="new-username">账户名</label>
+            <input type="text" id="new-username" x-model="newUser.username" placeholder="例如：mom_001" class="fr-input w-full" required>
+          </div>
+          <div>
+            <label class="fr-label block mb-2" for="new-password">初始密码</label>
+            <input type="password" id="new-password" x-model="newUser.password" placeholder="设置登录密码" class="fr-input w-full" required>
+          </div>
+          <div>
+            <label class="fr-label block mb-3">家庭成员称谓</label>
+            <div class="grid grid-cols-4 gap-2">
+              <template x-for="p in FAMILY_PRESETS" :key="p.key">
+                <button type="button" @click="selectPreset(p)"
+                        :class="newUser.avatar === p.key ? 'border-[var(--fr-primary)] bg-[var(--fr-primary-soft)] ring-2 ring-[var(--fr-primary)]/30' : 'border-border hover:border-muted-foreground/30'"
+                        class="aspect-square rounded-xl border p-2 flex flex-col items-center justify-center gap-1 transition-all">
+                  <span class="text-xl" x-text="p.emoji"></span>
+                  <span class="fr-caption" x-text="p.name"></span>
+                </button>
+              </template>
+            </div>
+          </div>
+          <div>
+            <label class="fr-label block mb-3">权限</label>
+            <div class="grid grid-cols-2 gap-3">
+              <button type="button" @click="newUser.is_admin = false"
+                      :class="!newUser.is_admin ? 'border-[var(--fr-primary)] bg-[var(--fr-primary-soft)] text-primary' : 'border-border bg-muted/40 text-muted-foreground'"
+                      class="rounded-xl border p-4 text-left transition-colors">
+                <i data-lucide="user" class="w-5 h-5 mb-2"></i>
+                <p class="fr-label">普通成员</p>
+                <p class="fr-caption">可浏览、收藏、创建食谱</p>
+              </button>
+              <button type="button" @click="newUser.is_admin = true"
+                      :class="newUser.is_admin ? 'border-[var(--fr-primary)] bg-[var(--fr-primary-soft)] text-primary' : 'border-border bg-muted/40 text-muted-foreground'"
+                      class="rounded-xl border p-4 text-left transition-colors">
+                <i data-lucide="shield-check" class="w-5 h-5 mb-2"></i>
+                <p class="fr-label">管理员</p>
+                <p class="fr-caption">额外可管理用户与权限</p>
+              </button>
+            </div>
+          </div>
+          <p x-show="addError" x-text="addError" class="fr-body text-[var(--fr-state-error)] bg-[var(--fr-state-success-soft)] rounded-lg px-3 py-2 border border-red-200"></p>
+          <div class="flex items-center justify-end gap-3 pt-2">
+            <button type="button" @click="closeAdd()" class="fr-btn fr-btn-secondary">取消</button>
+            <button type="submit" :disabled="creating" class="fr-btn fr-btn-primary disabled:opacity-60">
+              <i data-lucide="user-plus" class="w-5 h-5"></i>
+              <span x-show="!creating">保存</span>
+              <span x-show="creating">创建中…</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

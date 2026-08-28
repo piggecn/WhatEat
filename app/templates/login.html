@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}登录 · 今天吃点啥{% endblock %}
+
+{% block body_class %}flex items-center justify-center p-4{% endblock %}
+
+{% block content %}
+{% set bg = (login_bg_image or '') %}
+<main class="w-full max-w-md relative z-10" x-data="loginPage()"
+      {% if bg %}
+      style="--login-bg: url('{{ bg | safe }}');"
+      {% endif %}
+>
+  <div class="fr-card p-6 sm:p-8 relative" {% if bg %}style="backdrop-filter: blur(4px);"{% endif %}>
+    <div class="text-center mb-8">
+      <img src="/static/logo.png" alt="今天吃点啥 Logo" class="w-16 h-16 rounded-2xl object-cover border border-border shadow-sm mx-auto mb-5">
+      <h1 class="fr-h1 mb-2">今天吃点啥</h1>
+      <p class="fr-body text-muted-foreground">每天都有新选择</p>
+    </div>
+
+    <form class="space-y-5" @submit.prevent="submit()">
+      <div>
+        <label class="fr-label block mb-2" for="username">用户名</label>
+        <div class="relative">
+          <i data-lucide="user" class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground"></i>
+          <input type="text" id="username" x-model="form.username" autocomplete="username" placeholder="请输入用户名" class="fr-input w-full pl-10" required>
+        </div>
+      </div>
+      <div>
+        <label class="fr-label block mb-2" for="password">密码</label>
+        <div class="relative">
+          <i data-lucide="lock" class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground"></i>
+          <input type="password" id="password" x-model="form.password" autocomplete="current-password" placeholder="请输入密码" class="fr-input w-full pl-10" required>
+        </div>
+      </div>
+
+      <label class="flex items-center gap-2 cursor-pointer select-none">
+        <input type="checkbox" x-model="form.remember_me" class="w-4 h-4 accent-[var(--fr-primary)] rounded border-border">
+        <span class="fr-body text-muted-foreground">记住我（本地网络登录一次，30 天免登录）</span>
+      </label>
+
+      <p x-show="error" x-text="error" x-transition class="fr-body text-[var(--fr-state-error)] bg-[var(--fr-state-success-soft)] rounded-lg px-3 py-2 border border-red-200"></p>
+
+      <button type="submit" :disabled="loading" class="fr-btn fr-btn-primary w-full disabled:opacity-60">
+        <i data-lucide="log-in" class="w-5 h-5"></i>
+        <span x-show="!loading">登录</span>
+        <span x-show="loading">登录中…</span>
+      </button>
+    </form>
+  </div>
+
+  <p class="text-center fr-caption text-muted-foreground mt-6">© 2026 今天吃点啥</p>
+</main>
+{% endblock %}
+
+{% block body_extra %}
+{% if bg %}
+{# —— 有自定义登录背景时：放一张固定全屏图 + 橙色渐变遮罩 —— #}
+<style>
+  body {
+    position: relative;
+    min-height: 100vh;
+    background-image:
+      linear-gradient(135deg, rgba(255,107,53,0.60) 0%, rgba(255,180,120,0.30) 45%, rgba(61,53,48,0.55) 100%),
+      var(--login-bg);
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+  }
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: radial-gradient(1200px 600px at 20% -10%, rgba(255,255,255,0.15), transparent 60%),
+                radial-gradient(900px 500px at 100% 110%, rgba(255,107,53,0.25), transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  /* 登录卡片：在彩图背景上加轻微磨砂 + 深色描边，对比更清晰 */
+  .fr-card { box-shadow: 0 24px 60px -20px rgba(0,0,0,0.35); }
+</style>
+{% else %}
+<style>
+  body {
+    min-height: 100vh;
+    background: radial-gradient(1200px 600px at 0% 0%, #FFE6D6 0%, transparent 55%),
+               radial-gradient(900px 500px at 100% 110%, #FFB27A 0%, transparent 55%),
+               var(--fr-background);
+  }
+</style>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,260 @@
+{% extends "base.html" %}
+{% block title %}家庭日历 · 今天吃点啥{% endblock %}
+
+{% block content %}
+<div x-data="calendarPage()" class="min-h-screen">
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="mb-6">
+      <h1 class="fr-h1 mb-2">家庭日历</h1>
+      <p class="fr-body text-muted-foreground">提前安排本周吃啥，回顾每月记录</p>
+    </div>
+
+    <!-- Tab 切换 -->
+    <div class="flex items-center gap-2 mb-6 bg-card rounded-xl p-1 border border-border w-fit">
+      <button @click="tab = 'week'" :class="tab === 'week' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'" class="px-4 py-2 rounded-lg fr-label transition-colors">
+        <span class="flex items-center gap-2">
+          <i data-lucide="calendar-days" class="w-4 h-4"></i>
+          本周预定
+        </span>
+      </button>
+      <button @click="tab = 'month'" :class="tab === 'month' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'" class="px-4 py-2 rounded-lg fr-label transition-colors">
+        <span class="flex items-center gap-2">
+          <i data-lucide="calendar-range" class="w-4 h-4"></i>
+          本月回顾
+        </span>
+      </button>
+    </div>
+
+    <!-- 周视图 -->
+    <div x-show="tab === 'week'" x-cloak>
+      <!-- 顶部切换箭头 + 周范围 -->
+      <div class="flex items-center justify-between mb-4">
+        <button @click="prevWeek()" class="fr-btn fr-btn-ghost w-10 h-10 p-0 rounded-full">
+          <i data-lucide="chevron-left" class="w-5 h-5"></i>
+        </button>
+        <h2 class="fr-h2" x-text="weekRangeText"></h2>
+        <button @click="nextWeek()" class="fr-btn fr-btn-ghost w-10 h-10 p-0 rounded-full">
+          <i data-lucide="chevron-right" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- 7列网格 -->
+      <div class="grid grid-cols-7 gap-3">
+        <!-- 星期头 -->
+        <template x-for="(day, dIdx) in weekDays" :key="'header-' + dIdx">
+          <div class="text-center">
+            <div class="fr-label text-muted-foreground mb-2" x-text="day.weekdayName"></div>
+            <div class="fr-h3" :class="day.isToday ? 'text-primary' : ''" x-text="day.dayNum"></div>
+          </div>
+        </template>
+        <!-- 早/午/晚 三行 -->
+        <template x-for="mealType in ['breakfast', 'lunch', 'dinner']" :key="'mealrow-' + mealType">
+          <template x-for="(day, dIdx) in weekDays" :key="mealType + '-' + dIdx">
+            <div class="min-h-[100px]">
+              <template x-if="!day[mealType]">
+                <button @click="openPicker(day.date, mealType)" class="w-full h-full min-h-[100px] rounded-xl border-2 border-dashed border-border hover:border-[var(--fr-primary)] hover:bg-[var(--fr-primary-soft)]/30 flex items-center justify-center text-muted-foreground hover:text-[var(--fr-primary)] transition-colors">
+                  <i data-lucide="plus" class="w-5 h-5"></i>
+                </button>
+              </template>
+              <template x-if="day[mealType]">
+                <div @click="cancelPlan(day.date, mealType)" class="w-full h-full min-h-[100px] rounded-xl border border-border bg-card overflow-hidden cursor-pointer hover:shadow-md transition-shadow fr-card group">
+                  <div class="relative aspect-[16/10] overflow-hidden">
+                    <img x-show="day[mealType].image_path" :src="day[mealType].image_path" :alt="day[mealType].title" class="w-full h-full object-cover">
+                    <div x-show="!day[mealType].image_path" class="w-full h-full bg-gradient-to-br from-[var(--fr-primary)] to-[var(--fr-state-success)] flex items-center justify-center">
+                      <i data-lucide="chef-hat" class="w-6 h-6 text-white/80"></i>
+                    </div>
+                  </div>
+                  <div class="p-2">
+                    <p class="fr-caption font-medium truncate" x-text="day[mealType].title"></p>
+                  </div>
+                  <div class="absolute inset-0 bg-black/0 group-hover:bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <span class="text-white fr-caption flex items-center gap-1">
+                      <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                      点击取消
+                    </span>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </template>
+        </template>
+      </div>
+
+      <!-- 底部按钮 -->
+      <div class="flex items-center justify-end gap-3 mt-6 pt-4 border-t border-border">
+        <button @click="randomFillWeek()" class="fr-btn fr-btn-secondary">
+          <i data-lucide="shuffle" class="w-4 h-4"></i>
+          随机填充本周
+        </button>
+        <button @click="openShopping()" class="fr-btn fr-btn-primary">
+          <i data-lucide="shopping-cart" class="w-4 h-4"></i>
+          生成本周购物清单
+        </button>
+      </div>
+    </div>
+
+    <!-- 月视图 -->
+    <div x-show="tab === 'month'" x-cloak>
+      <!-- 顶部切换箭头 + 月份 -->
+      <div class="flex items-center justify-between mb-4">
+        <button @click="prevMonth()" class="fr-btn fr-btn-ghost w-10 h-10 p-0 rounded-full">
+          <i data-lucide="chevron-left" class="w-5 h-5"></i>
+        </button>
+        <h2 class="fr-h2" x-text="monthYearText"></h2>
+        <button @click="nextMonth()" class="fr-btn fr-btn-ghost w-10 h-10 p-0 rounded-full">
+          <i data-lucide="chevron-right" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- 星期头 -->
+      <div class="grid grid-cols-7 gap-2 mb-2">
+        <template x-for="w in ['一', '二', '三', '四', '五', '六', '日']" :key="'weekhead-' + w">
+          <div class="text-center fr-caption text-muted-foreground py-2">周<span x-text="w"></span></div>
+        </template>
+      </div>
+
+      <!-- 月历网格 -->
+      <div class="grid grid-cols-7 gap-2">
+        <template x-for="(d, dIdx) in monthDays" :key="'md-' + dIdx">
+          <div class="min-h-[100px] rounded-xl border border-border p-2 transition-colors"
+               :class="d.inMonth ? 'bg-card hover:shadow-sm cursor-pointer' : 'bg-muted/20 opacity-40'"
+               @click="d.inMonth && (d.expanded = !d.expanded)">
+            <div class="flex items-center justify-between mb-2">
+              <span class="fr-body font-medium" :class="d.isToday ? 'text-primary' : ''" x-text="d.day"></span>
+            </div>
+            <!-- 小圆点指示器 -->
+            <div class="flex items-center justify-center gap-1 mb-1" x-show="d.hasMeals">
+              <span x-show="d.hasBreakfast" class="w-2 h-2 rounded-full bg-orange-400" title="早餐"></span>
+              <span x-show="d.hasLunch" class="w-2 h-2 rounded-full bg-emerald-500" title="午餐"></span>
+              <span x-show="d.hasDinner" class="w-2 h-2 rounded-full bg-violet-500" title="晚餐"></span>
+            </div>
+            <!-- 展开详情 -->
+            <div x-show="d.expanded && d.hasMeals" x-transition class="space-y-1 mt-2 pt-2 border-t border-border">
+              <template x-if="d.breakfast">
+                <div class="flex items-center gap-2 fr-caption">
+                  <span class="w-2 h-2 rounded-full bg-orange-400 shrink-0"></span>
+                  <span class="truncate" x-text="(d.breakfast.title || '') + '（早）'"></span>
+                </div>
+              </template>
+              <template x-if="d.lunch">
+                <div class="flex items-center gap-2 fr-caption">
+                  <span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+                  <span class="truncate" x-text="(d.lunch.title || '') + '（午）'"></span>
+                </div>
+              </template>
+              <template x-if="d.dinner">
+                <div class="flex items-center gap-2 fr-caption">
+                  <span class="w-2 h-2 rounded-full bg-violet-500 shrink-0"></span>
+                  <span class="truncate" x-text="(d.dinner.title || '') + '（晚）'"></span>
+                </div>
+              </template>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+  </main>
+
+  <!-- 食谱选择浮层 -->
+  <div x-show="pickerOpen" x-transition.opacity x-cloak class="fixed inset-0 z-50" aria-modal="true" role="dialog" @keydown.escape.window="pickerOpen = false">
+    <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="pickerOpen = false"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+      <div class="bg-card w-full max-w-3xl max-h-[85vh] rounded-2xl shadow-3 border border-border overflow-hidden flex flex-col">
+        <div class="p-5 border-b border-border flex items-center justify-between gap-4">
+          <div>
+            <h3 class="fr-h2">选择食谱</h3>
+            <p class="fr-caption text-muted-foreground mt-1" x-text="'安排 ' + pickerDate + ' ' + (pickerMealType === 'breakfast' ? '早餐' : pickerMealType === 'lunch' ? '午餐' : '晚餐')"></p>
+          </div>
+          <button @click="pickerOpen = false" class="w-8 h-8 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground shrink-0">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+        <!-- 搜索 + 分类筛选 -->
+        <div class="p-4 border-b border-border space-y-3">
+          <div class="relative">
+            <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground"></i>
+            <input type="text" x-model="pickerQ" @input.debounce.300ms="searchPickerRecipes()" placeholder="搜索菜谱…" class="fr-input w-full pl-10">
+          </div>
+        </div>
+        <!-- 网格卡片 -->
+        <div class="flex-1 overflow-y-auto p-4">
+          <div x-show="pickerLoading" class="py-12 text-center">
+            <div class="w-10 h-10 rounded-full bg-primary/10 mx-auto mb-3 flex items-center justify-center">
+              <i data-lucide="loader-2" class="w-5 h-5 text-primary animate-spin"></i>
+            </div>
+            <p class="fr-caption text-muted-foreground">加载中…</p>
+          </div>
+          <div x-show="!pickerLoading && pickerResults.length === 0" class="py-12 text-center">
+            <p class="fr-caption text-muted-foreground">没有找到食谱</p>
+          </div>
+          <div x-show="!pickerLoading && pickerResults.length > 0" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            <template x-for="r in pickerResults" :key="r.id">
+              <button @click="selectRecipe(r.id)" class="fr-card overflow-hidden text-left hover:-translate-y-0.5 transition-transform">
+                <div class="relative aspect-[16/10] overflow-hidden">
+                  <img x-show="r.image_path" :src="r.image_path" :alt="r.title" class="w-full h-full object-cover">
+                  <div x-show="!r.image_path" class="w-full h-full bg-gradient-to-br from-[var(--fr-primary)] to-[var(--fr-state-success)] flex items-center justify-center">
+                    <i data-lucide="chef-hat" class="w-8 h-8 text-white/80"></i>
+                  </div>
+                </div>
+                <div class="p-2">
+                  <p class="fr-body font-medium truncate" x-text="r.title"></p>
+                  <p class="fr-caption text-muted-foreground truncate" x-text="r.category || ''"></p>
+                </div>
+              </button>
+            </template>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 购物清单浮层 -->
+  <div x-show="shoppingOpen" x-transition.opacity x-cloak class="fixed inset-0 z-50" aria-modal="true" role="dialog" @keydown.escape.window="shoppingOpen = false">
+    <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="shoppingOpen = false"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+      <div class="bg-card w-full max-w-md max-h-[85vh] rounded-2xl shadow-3 border border-border overflow-hidden flex flex-col">
+        <div class="p-5 border-b border-border flex items-center justify-between gap-4">
+          <div>
+            <h3 class="fr-h2 flex items-center gap-2">
+              <i data-lucide="shopping-cart" class="w-5 h-5 text-primary"></i>
+              本周购物清单
+            </h3>
+            <p class="fr-caption text-muted-foreground mt-1">已自动去重，可直接对照采购</p>
+          </div>
+          <button @click="closeShopping()" class="w-8 h-8 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground shrink-0">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+        <div class="flex-1 overflow-y-auto p-5">
+          <div x-show="shoppingLoading" class="py-12 text-center">
+            <div class="w-10 h-10 rounded-full bg-primary/10 mx-auto mb-3 flex items-center justify-center">
+              <i data-lucide="loader-2" class="w-5 h-5 text-primary animate-spin"></i>
+            </div>
+            <p class="fr-caption text-muted-foreground">生成中…</p>
+          </div>
+          <div x-show="!shoppingLoading && shoppingItems.length === 0" class="py-12 text-center">
+            <p class="fr-caption text-muted-foreground">本周还没有预定，先去安排食谱吧～</p>
+          </div>
+          <ul x-show="!shoppingLoading && shoppingItems.length > 0" class="space-y-2">
+            <template x-for="(item, idx) in shoppingItems" :key="idx">
+              <li class="flex items-center gap-3 p-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors cursor-pointer" x-data="{ checked: false }" @click="checked = !checked">
+                <input type="checkbox" x-model="checked" class="w-5 h-5 accent-[var(--fr-primary)] rounded border-border" @click.stop>
+                <div class="flex-1">
+                  <p class="fr-body" :class="checked ? 'line-through text-muted-foreground' : ''" x-text="item.name"></p>
+                </div>
+                <p class="fr-caption text-muted-foreground" x-text="(item.amount || '') + (item.unit ? ' ' + item.unit : '')"></p>
+              </li>
+            </template>
+          </ul>
+        </div>
+        <div class="p-4 border-t border-border flex justify-end">
+          <button @click="closeShopping()" class="fr-btn fr-btn-primary">
+            <i data-lucide="check" class="w-4 h-4"></i>
+            知道了
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

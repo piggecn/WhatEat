@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block title %}关于 · 今天吃点啥{% endblock %}
+
+{% block body_class %}pb-16{% endblock %}
+
+{% block content %}
+<div x-data="aboutPage()">
+  <main class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="flex items-center gap-4 mb-6">
+      <img src="/static/logo.png" alt="今天吃点啥 Logo" class="w-14 h-14 rounded-2xl object-cover border border-border shadow-sm">
+      <div>
+        <h1 class="fr-h1 mb-1">关于「今天吃点啥」</h1>
+        <p class="fr-body text-muted-foreground">把家的味道，装进每个人的口袋里。</p>
+      </div>
+    </div>
+
+    <!-- 设计理念 -->
+    <section class="fr-card p-5 sm:p-6 mb-6">
+      <h2 class="fr-h2 mb-4 flex items-center gap-2">
+        <i data-lucide="lightbulb" class="w-5 h-5 text-primary"></i>设计理念
+      </h2>
+      <div class="space-y-3 fr-body text-muted-foreground">
+        <p>
+          「今天吃点啥」诞生于一个再普通不过的场景：一家人围在饭桌前，却为"今天吃什么"犯了难。
+          它不只记录菜谱，更希望成为家庭餐桌上的小帮手——把一家人的口味、收藏和记忆放在一起。
+        </p>
+        <p>
+          <span class="text-foreground font-medium">简单</span>：从新增一道菜到安排一周的早午晚餐，都尽量一步到位，
+          不给日常增添负担。界面清爽、操作直接，老人小孩也能轻松上手。
+        </p>
+        <p>
+          <span class="text-foreground font-medium">私密</span>：数据只保存在你自己部署的服务器上，家人共享，
+          不依赖任何第三方云平台，也不用担心自己的饮食喜好被拿去"分析"。
+        </p>
+        <p>
+          <span class="text-foreground font-medium">有温度</span>：每一道菜都可以配上一张封面图、一段描述和属于它的小故事。
+          多年以后再翻看，那些"第一次做的红烧肉""孩子最爱的小甜点"，都成了家里最珍贵的记忆。
+        </p>
+      </div>
+    </section>
+
+    <!-- 使用方法 -->
+    <section class="fr-card p-5 sm:p-6 mb-6">
+      <h2 class="fr-h2 mb-4 flex items-center gap-2">
+        <i data-lucide="book-open" class="w-5 h-5 text-primary"></i>使用方法
+      </h2>
+      <div class="space-y-4 fr-body text-muted-foreground">
+        <div>
+          <h3 class="fr-label text-foreground mb-1">🍽 记录一道菜</h3>
+          <p>顶部导航点「首页」→「新增食谱」，填写标题、分类、餐次、食材和步骤，还能上传或搜索一张封面图，保存即可。</p>
+        </div>
+        <div>
+          <h3 class="fr-label text-foreground mb-1">⭐ 收藏与查找</h3>
+          <p>看到喜欢的菜点爱心收藏，之后到顶部「我的收藏」统一查看，支持按分类、关键词和排序快速筛选。</p>
+        </div>
+        <div>
+          <h3 class="fr-label text-foreground mb-1">🎲 今天吃啥（随机推荐）</h3>
+          <p>不知道吃啥时，点首页的「随机推荐」，可按分类、餐次或"避开最近吃过的"来抽一道菜，帮你快速做决定。</p>
+        </div>
+        <div>
+          <h3 class="fr-label text-foreground mb-1">📅 周计划与月回顾</h3>
+          <p>顶部「日历」里，把每天的三餐提前安排好；月底还能回看这个月都吃了什么，轻松规划家庭菜单。</p>
+        </div>
+        <div>
+          <h3 class="fr-label text-foreground mb-1">👨‍👩‍👧 家人账号</h3>
+          <p>管理员在「管理中心」添加家庭成员账号，每个人都能用自己的身份收藏、记录，各看各的口味。</p>
+        </div>
+        <div>
+          <h3 class="fr-label text-foreground mb-1">🔔 版本更新</h3>
+          <p>「版本更新」区域会显示当前服务器版本和最新版本。发现新版本时，管理员可点击「在线更新」按钮一键拉取并重启服务。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 客户端配置二维码 -->
+    <section class="fr-card p-5 sm:p-6">
+      <h2 class="fr-h2 mb-4 flex items-center gap-2">
+        <i data-lucide="smartphone" class="w-5 h-5 text-primary"></i>手机客户端配置
+      </h2>
+      <p class="fr-body text-muted-foreground mb-4">
+        在手机上安装「今天吃点啥」App 后，在登录页右上角 ⚙ 点「扫描二维码配置」，
+        扫下面的码即可自动填好服务器地址，零手动输入。
+      </p>
+      <div x-show="!baseUrl" class="fr-caption text-muted-foreground mb-3">
+        尚未配置服务器对外地址，请先由管理员在「管理中心 → 系统设置」里填写服务器地址后再生成。
+      </div>
+      <div class="flex flex-col sm:flex-row items-start gap-5">
+        <div class="w-48 h-48 shrink-0 bg-white rounded-xl border border-border shadow-sm p-3 flex items-center justify-center">
+          <div x-ref="qrCanvas" class="w-full h-full">
+            <div x-show="!qrVisible && baseUrl" class="w-full h-full flex items-center justify-center fr-caption text-muted-foreground text-center p-2">
+              点下方「生成二维码」
+            </div>
+          </div>
+        </div>
+        <div class="space-y-3 min-w-0 flex-1">
+          <div class="flex flex-wrap gap-2">
+            <button type="button" @click="showQR()" :disabled="!baseUrl" class="fr-btn fr-btn-secondary disabled:opacity-50">
+              <i data-lucide="qr-code" class="w-4 h-4"></i>生成 / 显示二维码
+            </button>
+            <button type="button" @click="copyConfig()" :disabled="!baseUrl" class="fr-btn fr-btn-ghost disabled:opacity-50">
+              <i data-lucide="copy" class="w-4 h-4"></i>复制配置 URL
+            </button>
+          </div>
+          <p x-show="qrVisible && baseUrl" class="fr-body"><span class="fr-label">二维码内容：</span></p>
+          <code x-show="qrVisible && baseUrl" class="block bg-muted px-3 py-2 rounded-lg break-all text-xs" x-text='JSON.stringify({base_url: baseUrl})'></code>
+          <p class="fr-caption text-muted-foreground">当前服务器地址：<code class="px-1.5 py-0.5 bg-muted rounded" x-text="baseUrl || '未配置'"></code></p>
+          <p class="fr-caption text-muted-foreground">若管理员填的是 https 反代域名，家人即可在外网通过该地址访问。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 版本更新 -->
+    <section class="fr-card p-5 sm:p-6 mt-6">
+      <h2 class="fr-h2 mb-4 flex items-center gap-2">
+        <i data-lucide="download" class="w-5 h-5 text-primary"></i>版本更新
+      </h2>
+
+      <!-- 服务器版本：可点击检测更新 -->
+      <div class="flex flex-wrap items-center gap-2 mb-4">
+        <span class="fr-caption text-muted-foreground">服务器版本</span>
+        <button type="button" @click="checkUpdate()" :disabled="releaseLoading"
+                class="fr-tag inline-flex items-center gap-1.5 hover:opacity-80 transition-opacity cursor-pointer disabled:opacity-60"
+                title="点击检测是否有新版本">
+          <i data-lucide="refresh-cw" class="w-3.5 h-3.5" :class="releaseLoading ? 'animate-spin' : ''"></i>
+          <span x-text="release && release.server_version ? release.server_version : 'v' + '{{ APP_VERSION }}'"></span>
+        </button>
+        <span x-show="releaseLoading" class="fr-caption text-muted-foreground">检测中…</span>
+        <span
+          x-show="!releaseLoading && updateChecked && updateState === 'latest'"
+          class="fr-caption font-medium text-green-600">已是最新版本</span>
+        <span
+          x-show="!releaseLoading && updateChecked && updateState === 'outdated'"
+          class="fr-caption font-medium text-amber-600"
+          x-text="'发现新版本 v' + updateLatest + '，请更新'"></span>
+        <span
+          x-show="!releaseLoading && updateChecked && updateState === 'unconfigured'"
+          class="fr-caption font-medium text-muted-foreground">尚未配置发布仓库，无法检测更新</span>
+      </div>
+
+      <!-- 在线更新按钮（仅管理员可见） -->
+      <div x-show="is_admin && !releaseLoading && updateChecked && updateState === 'outdated'" class="mb-4">
+        <button type="button" @click="doUpdate()" :disabled="updating"
+                class="fr-btn fr-btn-primary h-10">
+          <i data-lucide="arrow-up-circle" class="w-4 h-4"></i>
+          <span x-text="updating ? '更新中…' : '在线更新到 v' + updateLatest"></span>
+        </button>
+        <span x-show="updating" class="fr-caption text-muted-foreground ml-3">正在拉取新镜像并重启服务，请稍候…</span>
+      </div>
+
+      <div x-show="!releaseLoading && release && release.configured && !release.error" class="space-y-3">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="fr-tag">最新发布 v<span x-text="release.version"></span></span>
+          <span x-show="release.pre_release" class="fr-tag fr-tag-neutral">预览版</span>
+        </div>
+        <div x-show="release.notes" class="fr-body text-muted-foreground text-sm max-h-48 overflow-y-auto bg-muted/50 rounded-lg p-3">
+          <pre class="whitespace-pre-wrap font-sans" x-text="release.notes"></pre>
+        </div>
+      </div>
+
+      <div x-show="!releaseLoading && (!release || !release.configured || release.error)"
+           class="fr-caption text-muted-foreground">
+        无法获取版本信息。请检查网络连接或稍后重试。
+      </div>
+    </section>
+  </main>
+</div>
+{% endblock %}

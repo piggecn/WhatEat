@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# 虚拟环境
+.venv/
+venv/
+env/
+
+# 数据库
+data/*.db
+data/.secret_key
+!data/.gitkeep
+
+# 上传文件
+data/uploads/
+
+# Docker
+.docker/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 临时文件
+*.tmp
+*.temp
+_check_settings.py
+_probe_*.py
+_test_*.py
+
+# 源码目录（不要上传）
+d:/git/源码/

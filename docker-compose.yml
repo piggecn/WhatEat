@@ -1,0 +1,13 @@
+services:
+  whateat:
+    build: .
+    image: whateat:latest
+    container_name: whateat
+    ports:
+      - "127.0.0.1:8765:8765"
+    volumes:
+      - recipe_data:/app/data
+    restart: unless-stopped
+
+volumes:
+  recipe_data:

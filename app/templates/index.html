@@ -1,0 +1,336 @@
+{% extends "base.html" %}
+{% block title %}{% if page == 'favorites' %}我的收藏{% else %}食谱首页{% endif %} · 今天吃点啥{% endblock %}
+
+{% block content %}
+<div x-data="indexPage('{{ current_category }}', '{{ current_sort if current_sort else 'added_desc' }}')" class="min-h-screen">
+  {% if page != 'favorites' %}
+  <!-- 轮播区域 -->
+  <section x-data="carouselComponent()" @mouseenter="mouseEnter()" @mouseleave="mouseLeave()" class="bg-gradient-to-br from-[var(--fr-primary-soft)] to-[var(--fr-background)] border-b border-border">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div class="relative rounded-2xl overflow-hidden border border-border bg-card shadow-2">
+        <!-- 加载中 -->
+        <div x-show="loading" class="aspect-[21/9] flex items-center justify-center">
+          <div class="w-12 h-12 rounded-full bg-primary/10 mx-auto mb-4 flex items-center justify-center">
+            <i data-lucide="loader-2" class="w-6 h-6 text-primary animate-spin"></i>
+          </div>
+        </div>
+        <!-- 轮播内容 -->
+        <div x-show="!loading && items.length > 0" x-cloak class="relative aspect-[21/9] select-none touch-pan-y"
+             @touchstart="touchStartX = $event.touches[0].clientX; touchStartY = $event.touches[0].clientY; touchMoved = false; touchDragging = 0;"
+             @touchmove="touchMoved = true; const dx = $event.touches[0].clientX - touchStartX; touchDragging = dx;"
+             @touchend="if(Math.abs(touchDragging) > 50 && touchMoved) { if(touchDragging < 0) next(); else prev(); } touchDragging = 0;"
+             x-init="touchStartX = 0; touchStartY = 0; touchDragging = 0; touchMoved = false;">
+          <div class="flex transition-transform duration-500 ease-out h-full"
+               :style="'transform: translateX(calc(-' + (currentIndex * 100) + '% + ' + (touchDragging) + 'px))'">
+            <template x-for="(item, idx) in items" :key="idx">
+              <div class="w-full h-full shrink-0 relative cursor-pointer" @click="if(!touchMoved) goToRecipe(item.id)">
+                <img x-show="item.image_url" :src="item.image_url" :alt="item.title" class="w-full h-full object-cover pointer-events-none">
+                <div x-show="!item.image_url" class="w-full h-full bg-gradient-to-br from-[var(--fr-primary)] to-[var(--fr-state-success)] flex items-center justify-center">
+                  <i data-lucide="chef-hat" class="w-20 h-20 text-white/80"></i>
+                </div>
+                <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
+                <div class="absolute bottom-0 left-0 right-0 p-4 sm:p-6 lg:p-8">
+                  <span x-show="item.category" class="fr-tag bg-white/20 text-white border border-white/30 mb-2 sm:mb-3 text-xs sm:text-sm" x-text="item.category"></span>
+                  <h3 class="text-white text-xl sm:text-3xl lg:text-4xl font-semibold tracking-tight" x-text="item.title"></h3>
+                  <span class="inline-flex items-center gap-1 text-white/70 text-xs sm:text-sm mt-2">
+                    <i data-lucide="external-link" class="w-3 h-3 sm:w-4 sm:h-4"></i>点击查看详情
+                  </span>
+                </div>
+              </div>
+            </template>
+          </div>
+          <!-- 左右箭头：移动端更小更透明，PC 端保持原样 -->
+          <button @click="prev()" class="absolute left-1 sm:left-3 top-1/2 -translate-y-1/2 w-7 h-7 sm:w-10 sm:h-10 rounded-full bg-white/40 sm:bg-white/90 backdrop-blur hover:bg-white flex items-center justify-center text-white sm:text-foreground shadow-none sm:shadow-sm transition-all" aria-label="上一张">
+            <i data-lucide="chevron-left" class="w-4 h-4 sm:w-5 sm:h-5"></i>
+          </button>
+          <button @click="next()" class="absolute right-1 sm:right-3 top-1/2 -translate-y-1/2 w-7 h-7 sm:w-10 sm:h-10 rounded-full bg-white/40 sm:bg-white/90 backdrop-blur hover:bg-white flex items-center justify-center text-white sm:text-foreground shadow-none sm:shadow-sm transition-all" aria-label="下一张">
+            <i data-lucide="chevron-right" class="w-4 h-4 sm:w-5 sm:h-5"></i>
+          </button>
+          <!-- 小圆点指示器 -->
+          <div class="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-2">
+            <template x-for="(item, idx) in items" :key="idx">
+              <button @click="goTo(idx)" :class="currentIndex === idx ? 'bg-white' : 'bg-white/40 hover:bg-white/60'" class="w-2.5 h-2.5 rounded-full transition-colors" :aria-label="'跳转到第' + (idx + 1) + '张'"></button>
+            </template>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 随机推荐 Hero：大按钮 + 今日菜单条 -->
+  <section class="border-b border-border">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div class="flex flex-col items-center gap-4">
+        <button @click="openRandom()" class="w-full sm:w-auto sm:min-w-[420px] fr-btn fr-btn-primary h-14 text-lg rounded-2xl shadow-2 hover:scale-[1.01] active:scale-95">
+          <span class="text-2xl">🤔</span>
+          <span>今天吃点啥？</span>
+          <i data-lucide="shuffle" class="w-5 h-5 opacity-80"></i>
+        </button>
+        {% if today_meals %}
+        <!-- 今日已选菜单条（按早/午/晚分组 + 删除） -->
+        <div class="w-full bg-card rounded-xl border border-border px-4 py-3"
+             x-data="{ deleting: false, async removeMeal(id) { if(this.deleting) return; this.deleting = true; try { const r = await RecipeApp.api('/api/meals/' + id, { method: 'DELETE' }); if(r.ok) window.location.reload(); } catch(e){} finally { this.deleting = false; } } }">
+          <div class="flex items-center gap-2 fr-label text-muted-foreground mb-3">
+            <i data-lucide="calendar-check" class="w-4 h-4 text-primary"></i>
+            今天已选
+          </div>
+          <div class="space-y-2">
+            {% set ns = namespace(breakfast=[], lunch=[], dinner=[]) %}
+            {% for m in today_meals %}
+              {% if m.meal_type == 'breakfast' %}{% set ns.breakfast = ns.breakfast + [m] %}
+              {% elif m.meal_type == 'lunch' %}{% set ns.lunch = ns.lunch + [m] %}
+              {% else %}{% set ns.dinner = ns.dinner + [m] %}{% endif %}
+            {% endfor %}
+
+            {% for label, items in [('🍳 早餐', ns.breakfast), ('🍲 午餐', ns.lunch), ('🍜 晚餐', ns.dinner)] %}
+              {% if items %}
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="fr-caption text-muted-foreground w-16 shrink-0">{{ label }}</span>
+                {% for m in items %}
+                <span class="inline-flex items-center gap-1.5 fr-tag fr-tag-neutral">
+                  <a href="/recipes/{{ m.recipe_id }}" class="hover:text-primary transition-colors">{{ m.title }}</a>
+                  <button type="button" @click="removeMeal({{ m.id }})" :disabled="deleting"
+                          class="text-muted-foreground hover:text-red-500 transition-colors" aria-label="删除">
+                    <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                  </button>
+                </span>
+                {% endfor %}
+              </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+
+  <!-- 随机推荐弹窗 -->
+  <div x-show="rand.open" x-transition.opacity x-cloak class="fixed inset-0 z-50" aria-modal="true" role="dialog" @keydown.escape.window="closeRandom()">
+    <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="closeRandom()"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4" @click="closeRandom()">
+      <div class="bg-card w-full max-w-lg rounded-2xl shadow-3 border border-border overflow-hidden" @click.stop>
+        <!-- 加载中 -->
+        <div x-show="rand.loading" class="p-12 text-center">
+          <div class="w-12 h-12 rounded-full bg-primary/10 mx-auto mb-4 flex items-center justify-center">
+            <i data-lucide="loader-2" class="w-6 h-6 text-primary animate-spin"></i>
+          </div>
+          <p class="fr-body text-muted-foreground">正在为你随机挑选…</p>
+        </div>
+        <!-- 错误 / 无候选 -->
+        <div x-show="rand.error && !rand.loading" class="p-12 text-center">
+          <p class="fr-body text-muted-foreground mb-4" x-text="rand.error"></p>
+          <button @click="fetchRandom()" class="fr-btn fr-btn-secondary">
+            <i data-lucide="refresh-cw" class="w-4 h-4"></i>再试一次
+          </button>
+        </div>
+        <!-- 无结果 -->
+        <div x-show="rand.recipe && rand.recipe.empty && !rand.loading" x-cloak class="p-8 text-center">
+          <div class="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
+            <i data-lucide="search-x" class="w-8 h-8 text-muted-foreground"></i>
+          </div>
+          <p class="fr-body text-muted-foreground mb-6" x-text="rand.recipe.message || '这个条件下没有可选的食谱了'"></p>
+          <div class="flex items-center justify-center gap-3">
+            <button @click="resetRandFilter()" class="fr-btn fr-btn-primary">
+              <i data-lucide="rotate-ccw" class="w-4 h-4"></i>重置筛选
+            </button>
+            <button @click="window.location.href='/'" class="fr-btn fr-btn-secondary">
+              <i data-lucide="book-open" class="w-4 h-4"></i>去看全部食谱
+            </button>
+          </div>
+        </div>
+        <!-- 推荐卡片 -->
+        <div x-show="rand.recipe && !rand.recipe.empty && !rand.loading" x-cloak>
+          <a :href="'/recipes/' + rand.recipe.id" class="block">
+            <div class="relative aspect-[16/9] overflow-hidden">
+              <img x-show="rand.recipe.image_path" :src="rand.recipe.image_path" :alt="rand.recipe.title" class="w-full h-full object-cover">
+              <div x-show="!rand.recipe.image_path" class="w-full h-full bg-gradient-to-br from-[var(--fr-primary)] to-[var(--fr-state-success)] flex items-center justify-center">
+                <i data-lucide="chef-hat" class="w-16 h-16 text-white/80"></i>
+              </div>
+              <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
+              <div class="absolute bottom-0 left-0 right-0 p-4">
+                <h3 class="fr-h2 text-white" x-text="rand.recipe.title"></h3>
+                <div class="flex items-center gap-3 mt-2 text-white/90 fr-caption">
+                  <span x-show="rand.recipe.category" class="fr-tag bg-white/20 text-white border border-white/30" x-text="rand.recipe.category"></span>
+                  <span class="flex items-center gap-1">
+                    <i data-lucide="clock" class="w-3.5 h-3.5"></i>
+                    <span x-text="(rand.recipe.prep_time || 0) + (rand.recipe.cook_time || 0)"></span> 分钟
+                  </span>
+                </div>
+              </div>
+            </div>
+          </a>
+          <!-- 放宽条件提示 -->
+          <div x-show="rand.recipe.fallback_level > 0 && rand.recipe.message" class="px-4 pt-3">
+            <div class="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--fr-primary-soft)] border border-[var(--fr-primary)]/30 text-[var(--fr-primary)] fr-caption">
+              <i data-lucide="sparkles" class="w-4 h-4 shrink-0"></i>
+              <span x-text="'已自动放宽条件为你挑选：' + rand.recipe.message"></span>
+            </div>
+          </div>
+          <!-- 筛选行 -->
+          <div class="px-4 py-3 border-t border-border flex items-center gap-3 flex-wrap">
+            <select x-model="rand.category" @change="fetchRandom()" class="fr-input h-9 py-1 text-sm pr-8 w-auto">
+              <option value="">全部分类</option>
+              {% for c in categories %}
+              <option value="{{ c }}">{{ c }}</option>
+              {% endfor %}
+            </select>
+            <select x-model="rand.meal_type" @change="fetchRandom()" class="fr-input h-9 py-1 text-sm pr-8 w-auto">
+              <option value="">全部餐次</option>
+              <option value="breakfast">早餐</option>
+              <option value="lunch">午餐</option>
+              <option value="dinner">晚餐</option>
+            </select>
+            <label class="flex items-center gap-2 cursor-pointer select-none fr-caption text-muted-foreground">
+              <input type="checkbox" x-model="rand.excludeRecent" @change="fetchRandom()" class="w-4 h-4 accent-[var(--fr-primary)] rounded border-border">
+              排除最近 3 天吃过
+            </label>
+          </div>
+          <!-- 底部按钮 -->
+          <div class="px-4 py-4 border-t border-border flex items-center gap-3">
+            <button @click="fetchRandom()" class="fr-btn fr-btn-secondary flex-1">
+              <i data-lucide="refresh-cw" class="w-4 h-4"></i>换一个 ↻
+            </button>
+            <button @click="confirmRandom()" :disabled="rand.confirming" class="fr-btn fr-btn-primary flex-1 disabled:opacity-60">
+              <i data-lucide="check" class="w-4 h-4"></i>
+              <span x-show="!rand.confirming">就它了！</span>
+              <span x-show="rand.confirming">记录中…</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Toast 提示 -->
+  <div x-show="rand.toast" x-transition x-cloak class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-foreground text-background rounded-full px-5 py-2 fr-body shadow-3">
+    <span x-text="rand.toast"></span>
+  </div>
+  {% endif %}{# ——以上区块仅首页：轮播 + 随机推荐 + Toast ——#}
+
+  <!-- Search / filter / add bar -->
+  <section class="border-b border-border bg-card">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
+      <div class="flex flex-col lg:flex-row lg:items-center gap-4 lg:gap-6">
+        <div class="relative flex-1 max-w-xl">
+          <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground"></i>
+          <input type="text" x-model="q" @keydown.enter="applyFilter()" placeholder="搜索菜谱、食材或作者…" class="fr-input w-full pl-10" value="{{ current_q }}">
+        </div>
+        <div class="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 lg:pb-0">
+          <button @click="selectCategory('')" :class="category === '' ? 'fr-tag' : 'fr-tag fr-tag-neutral'" class="whitespace-nowrap">全部</button>
+          {% for c in categories %}
+          <button @click="selectCategory('{{ c }}')" :class="category === '{{ c }}' ? 'fr-tag' : 'fr-tag fr-tag-neutral'" class="whitespace-nowrap">{{ c }}</button>
+          {% endfor %}
+        </div>
+        <div class="relative shrink-0">
+          <i data-lucide="arrow-up-down" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"></i>
+          <select x-model="sort" @change="applyFilter()" class="fr-input h-9 py-1 text-sm pl-9 pr-8 w-auto appearance-none" value="{{ current_sort }}">
+            {% for val, label in sort_options %}
+            <option value="{{ val }}" {% if current_sort == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <a href="/recipes/new" class="fr-btn fr-btn-primary shrink-0 lg:ml-auto">
+          <i data-lucide="plus" class="w-5 h-5"></i>
+          <span>添加食谱</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <h1 class="fr-h1 mb-6 flex items-baseline flex-wrap gap-3">
+      {% if page == 'favorites' %}
+      <span>我的收藏</span>
+      {#  favorites 页：二级行显示当前筛选条件 #}
+      {% if current_category or current_q %}
+      <span class="fr-caption text-muted-foreground ml-1">
+        ·
+        {% if current_category %}{{ current_category }}{% endif %}
+        {% if current_category and current_q %} / {% endif %}
+        {% if current_q %}搜索：{{ current_q }}{% endif %}
+      </span>
+      {% endif %}
+      {% else %}
+      {#  SSR 标题：只显示一次，Alpine 未就绪时不重复不闪烁 #}
+      <span x-show="false">
+        {{ current_category + '食谱' if current_category else '全部食谱' }}
+        {% if current_q %}（搜索：{{ current_q }}）{% endif %}
+      </span>
+      {#  Alpine 接管后的实时标题（用 x-cloak 在 Alpine 就绪前隐藏，避免 SSR 与动态双重显示）#}
+      <span x-cloak x-show="!category && !q">全部食谱</span>
+      <span x-cloak x-show="category && !q" x-text="category + '食谱'"></span>
+      <span x-cloak x-show="q && !category" x-text="'搜索：' + q"></span>
+      <span x-cloak x-show="category && q">
+        <span x-text="category + '食谱'"></span>
+        <span class="fr-caption text-muted-foreground ml-2" x-text="'搜索：' + q"></span>
+      </span>
+      {% endif %}
+    </h1>
+
+    {% if recipes %}
+    <!-- Recipe grid -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      {% for r in recipes %}
+      <a href="/recipes/{{ r.id }}" class="fr-card group overflow-hidden block transition-transform hover:-translate-y-1">
+        <div class="relative aspect-[16/10] overflow-hidden">
+          {% if r.image_path %}
+          <img src="{{ r.image_path }}" alt="{{ r.title }}" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105">
+          {% else %}
+          <div class="w-full h-full bg-gradient-to-br from-[var(--fr-primary)] to-[var(--fr-state-success)] flex items-center justify-center">
+            <i data-lucide="chef-hat" class="w-12 h-12 text-white/80"></i>
+          </div>
+          {% endif %}
+          <button @click.prevent="toggleFavorite({{ r.id }}, $event.currentTarget)"
+                  class="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/90 backdrop-blur flex items-center justify-center shadow-sm {% if r.is_favorite %}text-red-500{% else %}text-muted-foreground{% endif %}"
+                  :class="false"
+                  aria-label="{% if r.is_favorite %}取消收藏{% else %}收藏{% endif %}">
+            <i data-lucide="heart" class="w-4 h-4 {% if r.is_favorite %}fill-current{% endif %}"></i>
+          </button>
+        </div>
+        <div class="p-4">
+          <div class="flex items-start justify-between gap-2 mb-2">
+            <h3 class="fr-h3 text-lg leading-tight">{{ r.title }}</h3>
+            <span class="fr-tag shrink-0">{{ r.category or '其他' }}</span>
+          </div>
+          <div class="flex items-center justify-between text-muted-foreground fr-caption">
+            <span class="flex items-center gap-1.5">
+              {{ avatar_html(r.author_avatar, r.author_display_name or r.author, r.author, 16) | safe }}
+              {{ r.author_display_name or r.author }}
+            </span>
+            {% if r.cook_time %}
+            <span class="flex items-center gap-1">
+              <i data-lucide="clock" class="w-3.5 h-3.5"></i>
+              {{ r.cook_time }} 分钟
+            </span>
+            {% endif %}
+          </div>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}
+    <!-- Empty state -->
+    <div class="flex-col items-center justify-center py-20 text-center">
+      <div class="w-20 h-20 rounded-full bg-muted flex items-center justify-center mb-5 mx-auto">
+        <i data-lucide="chef-hat" class="w-10 h-10 text-muted-foreground"></i>
+      </div>
+      <h2 class="fr-h2 mb-2">{% if page == 'favorites' %}还没有收藏的食谱{% else %}还没有食谱{% endif %}</h2>
+      <p class="fr-body text-muted-foreground mb-6 max-w-sm mx-auto">
+        {% if page == 'favorites' %}
+        浏览食谱时点击爱心，就能把喜欢的菜收藏到这里。
+        {% else %}
+        添加第一道菜，把家的味道记录下来，全家人都能一起浏览和收藏。
+        {% endif %}
+      </p>
+      {% if page != 'favorites' %}
+      <a href="/recipes/new" class="fr-btn fr-btn-primary">
+        <i data-lucide="plus" class="w-5 h-5"></i>
+        添加第一条食谱
+      </a>
+      {% endif %}
+    </div>
+    {% endif %}
+  </main>
+</div>
+{% endblock %}

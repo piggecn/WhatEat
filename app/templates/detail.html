@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+{% block title %}{{ recipe.title }} · 食谱详情 · 今天吃点啥{% endblock %}
+
+{% block content %}
+<div x-data="detailPage({{ recipe_id }}, {% if recipe.is_favorite %}true{% else %}false{% endif %})" class="pb-28">
+  <!-- Hero -->
+  <section class="relative w-full aspect-video max-h-[420px] overflow-hidden">
+    {% if recipe.image_path %}
+    <img src="{{ recipe.image_path }}" alt="{{ recipe.title }}" class="w-full h-full object-cover">
+    {% else %}
+    <div class="w-full h-full bg-gradient-to-br from-[var(--fr-primary)] to-[var(--fr-state-success)] flex items-center justify-center">
+      <i data-lucide="chef-hat" class="w-20 h-20 text-white/80"></i>
+    </div>
+    {% endif %}
+    <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
+    <div class="absolute bottom-0 left-0 right-0 p-4 sm:p-6 lg:p-8">
+      <div class="max-w-7xl mx-auto">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="fr-tag bg-white/20 text-white border border-white/30">{{ recipe.category or '其他' }}</span>
+        </div>
+        <h1 class="text-white text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight">{{ recipe.title }}</h1>
+        {% if recipe.description %}
+        <p class="text-white/80 fr-body-lg mt-2 max-w-2xl">{{ recipe.description }}</p>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+
+  <!-- Meta -->
+  <section class="bg-card border-b border-border">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div class="fr-card p-4 text-center">
+          <div class="flex items-center justify-center gap-2 text-muted-foreground fr-caption mb-1">
+            <i data-lucide="users" class="w-4 h-4"></i>
+            人数
+          </div>
+          <p class="fr-h3">{{ recipe.servings or '-' }} 人份</p>
+        </div>
+        <div class="fr-card p-4 text-center">
+          <div class="flex items-center justify-center gap-2 text-muted-foreground fr-caption mb-1">
+            <i data-lucide="clock" class="w-4 h-4"></i>
+            准备
+          </div>
+          <p class="fr-h3">{{ recipe.prep_time or '-' }} 分钟</p>
+        </div>
+        <div class="fr-card p-4 text-center">
+          <div class="flex items-center justify-center gap-2 text-muted-foreground fr-caption mb-1">
+            <i data-lucide="flame" class="w-4 h-4"></i>
+            烹饪
+          </div>
+          <p class="fr-h3">{{ recipe.cook_time or '-' }} 分钟</p>
+        </div>
+        <div class="fr-card p-4 text-center">
+          <div class="flex items-center justify-center gap-2 text-muted-foreground fr-caption mb-1">
+            <i data-lucide="user" class="w-4 h-4"></i>
+            作者
+          </div>
+          <div class="flex items-center justify-center gap-2">
+            {{ avatar_html(recipe.author_avatar, recipe.author_display_name or recipe.author, recipe.author, 24) | safe }}
+            <p class="fr-h3">{{ recipe.author_display_name or recipe.author }}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Ingredients & Steps -->
+  <section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+      <!-- Ingredients -->
+      <div class="fr-card p-5 sm:p-6">
+        <h2 class="fr-h2 mb-5 flex items-center gap-2">
+          <i data-lucide="shopping-basket" class="w-6 h-6 text-primary"></i>
+          食材清单
+        </h2>
+        <ul class="space-y-3">
+          {% for ing in recipe.ingredients %}
+          <li class="flex items-center gap-3 p-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors cursor-pointer"
+              x-data="{ checked: false }" @click="checked = !checked">
+            <input type="checkbox" x-model="checked" class="w-5 h-5 accent-[var(--fr-primary)] rounded border-border" @click.stop>
+            <label class="flex-1 fr-body cursor-pointer" :class="checked ? 'line-through text-muted-foreground' : ''">
+              {{ ing.name }}
+              {% if ing.amount or ing.unit %}
+              <span class="text-muted-foreground fr-caption">{{ ing.amount }}{% if ing.unit %} {{ ing.unit }}{% endif %}</span>
+              {% endif %}
+            </label>
+          </li>
+          {% else %}
+          <li class="fr-body text-muted-foreground text-center py-4">暂无食材信息</li>
+          {% endfor %}
+        </ul>
+      </div>
+
+      <!-- Steps -->
+      <div class="fr-card p-5 sm:p-6">
+        <h2 class="fr-h2 mb-5 flex items-center gap-2">
+          <i data-lucide="list-ordered" class="w-6 h-6 text-primary"></i>
+          烹饪步骤
+        </h2>
+        <ol class="space-y-5">
+          {% for step in recipe.steps %}
+          <li class="flex gap-4">
+            <span class="shrink-0 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-semibold">{{ step.step_number }}</span>
+            <p class="fr-body pt-1">{{ step.description }}</p>
+          </li>
+          {% else %}
+          <li class="fr-body text-muted-foreground text-center py-4">暂无步骤信息</li>
+          {% endfor %}
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- Bottom action bar -->
+  <div class="fixed bottom-0 left-0 right-0 bg-card border-t border-border px-4 py-4 sm:px-6 lg:px-8 z-20">
+    <div class="max-w-7xl mx-auto flex items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <button @click="toggleFavorite()" class="fr-btn fr-btn-secondary">
+          <i data-lucide="heart" class="w-5 h-5" :class="isFav ? 'text-red-500 fill-current' : 'text-muted-foreground'"></i>
+          <span x-text="isFav ? '已收藏' : '收藏'"></span>
+        </button>
+        <button @click="openMealPicker()" x-show="!mealRecorded" class="fr-btn fr-btn-primary">
+          <i data-lucide="utensils" class="w-5 h-5"></i>
+          今天做这个
+        </button>
+        <span x-show="mealRecorded" x-cloak class="fr-btn fr-btn-secondary text-[var(--fr-state-success)] border-[var(--fr-state-success)] cursor-default">
+          <i data-lucide="check" class="w-5 h-5"></i>
+          ✓ 已记录
+        </span>
+      </div>
+      <div class="flex items-center gap-3">
+        <button @click="copyRecipe()" class="fr-btn fr-btn-secondary" title="复制菜谱为文本">
+          <i data-lucide="copy" class="w-5 h-5"></i>
+          <span class="hidden sm:inline">复制菜谱</span>
+        </button>
+        <button @click="shareRecipe()" class="fr-btn fr-btn-secondary" title="分享菜谱">
+          <i data-lucide="share-2" class="w-5 h-5"></i>
+          <span class="hidden sm:inline">分享</span>
+        </button>
+        <a href="/recipes/{{ recipe.id }}/edit" class="fr-btn fr-btn-primary">
+          <i data-lucide="pencil" class="w-5 h-5"></i>
+          编辑食谱
+        </a>
+        <button @click="askDelete()" class="fr-btn fr-btn-secondary hover:text-red-600 hover:border-red-300 hover:bg-red-50">
+          <i data-lucide="trash-2" class="w-5 h-5"></i>
+          删除
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 用餐类型选择弹窗 -->
+  <div x-show="mealPickerOpen" x-transition.opacity x-cloak class="fixed inset-0 z-50" aria-modal="true" role="dialog" @keydown.escape.window="closeMealPicker()">
+    <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="closeMealPicker()"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+      <div class="bg-card w-full max-w-sm rounded-2xl shadow-3 border border-border overflow-hidden">
+        <div class="p-5 border-b border-border">
+          <h3 class="fr-h2">记录到哪一餐？</h3>
+          <p class="fr-caption text-muted-foreground mt-1" x-text="'今天 ' + todayDate"></p>
+        </div>
+        <div class="p-2">
+          <button @click="recordMeal('breakfast')" :disabled="mealRecording" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-muted transition-colors text-left disabled:opacity-60">
+            <i data-lucide="sunrise" class="w-5 h-5 text-primary"></i>
+            <span class="fr-body">早餐</span>
+          </button>
+          <button @click="recordMeal('lunch')" :disabled="mealRecording" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-muted transition-colors text-left disabled:opacity-60">
+            <i data-lucide="sun" class="w-5 h-5 text-primary"></i>
+            <span class="fr-body">午餐</span>
+          </button>
+          <button @click="recordMeal('dinner')" :disabled="mealRecording" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-muted transition-colors text-left disabled:opacity-60">
+            <i data-lucide="moon" class="w-5 h-5 text-primary"></i>
+            <span class="fr-body">晚餐</span>
+          </button>
+        </div>
+        <div class="p-3 border-t border-border">
+          <button @click="closeMealPicker()" class="fr-btn fr-btn-secondary w-full">取消</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast 提示 -->
+  <div x-show="mealToast" x-transition x-cloak class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-foreground text-background rounded-full px-5 py-2 fr-body shadow-3">
+    <span x-text="mealToast"></span>
+  </div>
+</div>
+{% endblock %}

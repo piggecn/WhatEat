@@ -1,0 +1,476 @@
+{% extends "base.html" %}
+{% block title %}{% if mode == 'edit' %}编辑食谱{% else %}新增食谱{% endif %} · 今天吃点啥{% endblock %}
+
+{% block body_class %}pb-28{% endblock %}
+
+{% block content %}
+<div x-data="editPage({% if mode == 'edit' %}true{% else %}false{% endif %}, {{ recipe_id or 'null' }}, '{{ image_provider or 'pixabay' }}')">
+  <main class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <h1 class="fr-h1 mb-2" x-text="isEdit ? '编辑食谱' : '新增食谱'"></h1>
+    <p class="fr-body text-muted-foreground mb-8">填写下方信息，把家的味道记录下来。</p>
+
+    <form class="space-y-6" @submit.prevent="submit()">
+      <!-- Error -->
+      <p x-show="error" x-cloak x-text="error" class="fr-body text-[var(--fr-state-error)] bg-[var(--fr-state-success-soft)] rounded-lg px-4 py-3 border border-red-200"></p>
+
+      <!-- Basic info -->
+      <section class="fr-card p-5 sm:p-6">
+        <h2 class="fr-h2 mb-5 flex items-center gap-2">
+          <i data-lucide="info" class="w-5 h-5 text-primary"></i>
+          基本信息
+        </h2>
+        <div class="space-y-5">
+          <div>
+            <label class="fr-label block mb-2" for="title">食谱标题</label>
+            <input type="text" id="title" x-model="form.title" placeholder="例如：番茄炒蛋" class="fr-input w-full" required>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div>
+              <label class="fr-label block mb-2" for="category">分类</label>
+              <div class="relative">
+                <select id="category" x-model="form.category" class="fr-input w-full appearance-none pr-10">
+                  <option value="">不选</option>
+                  <option>早餐</option>
+                  <option>午餐</option>
+                  <option>晚餐</option>
+                  <option>甜点</option>
+                  <option>小吃</option>
+                  <option>饮品</option>
+                </select>
+                <i data-lucide="chevron-down" class="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none"></i>
+              </div>
+            </div>
+            <div>
+              <label class="fr-label block mb-2" for="servings">份数</label>
+              <input type="number" id="servings" x-model.number="form.servings" placeholder="3" class="fr-input w-full">
+            </div>
+          </div>
+          <!-- 适用餐次 -->
+          <div>
+            <label class="fr-label block mb-3">适用餐次 <span class="text-[var(--fr-state-error)]">*</span></label>
+            <div class="grid grid-cols-3 gap-3">
+              <button type="button" @click="toggleMealTag('breakfast')"
+                      :class="form.meal_tags.includes('breakfast') ? 'border-[var(--fr-primary)] bg-[var(--fr-primary-soft)] text-primary ring-2 ring-[var(--fr-primary)]/30' : 'border-border bg-muted/40 text-muted-foreground hover:border-muted-foreground/30'"
+                      class="rounded-xl border p-4 text-center transition-all">
+                <i data-lucide="sunrise" class="w-5 h-5 mx-auto mb-1"></i>
+                <p class="fr-label">早餐</p>
+              </button>
+              <button type="button" @click="toggleMealTag('lunch')"
+                      :class="form.meal_tags.includes('lunch') ? 'border-[var(--fr-primary)] bg-[var(--fr-primary-soft)] text-primary ring-2 ring-[var(--fr-primary)]/30' : 'border-border bg-muted/40 text-muted-foreground hover:border-muted-foreground/30'"
+                      class="rounded-xl border p-4 text-center transition-all">
+                <i data-lucide="sun" class="w-5 h-5 mx-auto mb-1"></i>
+                <p class="fr-label">午餐</p>
+              </button>
+              <button type="button" @click="toggleMealTag('dinner')"
+                      :class="form.meal_tags.includes('dinner') ? 'border-[var(--fr-primary)] bg-[var(--fr-primary-soft)] text-primary ring-2 ring-[var(--fr-primary)]/30' : 'border-border bg-muted/40 text-muted-foreground hover:border-muted-foreground/30'"
+                      class="rounded-xl border p-4 text-center transition-all">
+                <i data-lucide="moon" class="w-5 h-5 mx-auto mb-1"></i>
+                <p class="fr-label">晚餐</p>
+              </button>
+            </div>
+            <p x-show="form.meal_tags.length === 0" class="fr-caption text-[var(--fr-state-error)] mt-2">请至少选择一个餐次</p>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div>
+              <label class="fr-label block mb-2" for="prep-time">准备时间（分钟）</label>
+              <input type="number" id="prep-time" x-model.number="form.prep_time" placeholder="10" class="fr-input w-full">
+            </div>
+            <div>
+              <label class="fr-label block mb-2" for="cook-time">烹饪时间（分钟）</label>
+              <input type="number" id="cook-time" x-model.number="form.cook_time" placeholder="10" class="fr-input w-full">
+            </div>
+          </div>
+          <div>
+            <label class="fr-label block mb-2" for="description">描述</label>
+            <textarea id="description" x-model="form.description" rows="3" placeholder="简单介绍一下这道菜的特点…" class="fr-input w-full py-3 resize-none"></textarea>
+          </div>
+        </div>
+
+        <!-- 导入菜谱弹层：搜索导入（TheMealDB）+ 粘贴导入 -->
+        <div x-show="recipeImport.open" x-transition.opacity x-cloak class="mt-4 rounded-2xl border border-border bg-muted/30 p-4">
+          <div class="flex items-center justify-between mb-3">
+            <p class="fr-body font-medium">导入菜谱</p>
+            <button type="button" @click="closeRecipeImport()" class="w-8 h-8 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground">
+              <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+          </div>
+
+          <!-- Tab：搜索 / 粘贴 -->
+          <div class="flex items-stretch gap-1 mb-3 border-b border-border">
+            <button type="button" @click="recipeImport.tab='search'" :class="recipeImport.tab==='search' ? 'border-[var(--fr-primary)] text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'"
+                    class="border-b-2 px-2 sm:px-3 py-1.5 text-sm whitespace-nowrap transition-colors shrink-0 min-w-0">
+              <i data-lucide="search" class="w-4 h-4 inline-block sm:hidden"></i>
+              <span class="hidden sm:inline">🔍 搜索导入（TheMealDB）</span>
+              <span class="sm:hidden">搜索</span>
+            </button>
+            <button type="button" @click="recipeImport.tab='paste'" :class="recipeImport.tab==='paste' ? 'border-[var(--fr-primary)] text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'"
+                    class="border-b-2 px-2 sm:px-3 py-1.5 text-sm whitespace-nowrap transition-colors shrink-0 min-w-0">
+              <i data-lucide="clipboard" class="w-4 h-4 inline-block sm:hidden"></i>
+              <span class="hidden sm:inline">📋 粘贴导入（小红书等）</span>
+              <span class="sm:hidden">粘贴</span>
+            </button>
+          </div>
+
+          <!-- 搜索 Tab -->
+            <div x-show="recipeImport.tab==='search'">
+              <div class="flex flex-col sm:flex-row items-stretch gap-2 mb-2">
+                <button type="button" @click="toggleZhEn()"
+                        :title="recipeImport.enMode ? '切回中文搜索' : '转为英文搜索'"
+                        :class="recipeImport.enMode ? 'bg-[var(--fr-primary)] text-white border-[var(--fr-primary)]' : 'border-border text-muted-foreground hover:border-[var(--fr-primary)] hover:text-primary'"
+                        class="h-10 px-3 rounded-lg border transition-colors shrink-0 flex items-center justify-center gap-1">
+                  <span x-text="recipeImport.zhKeyword && recipeImport.enQueries.length ? (recipeImport.enMode ? 'EN' : '中') : '中英'"></span>
+                  <i data-lucide="languages" class="w-4 h-4"></i>
+                </button>
+                <div class="flex flex-1 min-w-0 gap-2">
+                  <input type="text" x-model="recipeImport.keyword" @keydown.enter.prevent="doRecipeSearch()"
+                         placeholder="输入菜名（中英文均可）" class="fr-input flex-1 min-w-0 h-10">
+                  <button type="button" @click="doRecipeSearch()" :disabled="recipeImport.loading || !recipeImport.keyword.trim()"
+                          class="fr-btn fr-btn-primary h-10 disabled:opacity-60 shrink-0">
+                    <i data-lucide="search" class="w-4 h-4"></i>
+                    <span x-show="!recipeImport.loading" x-text="recipeImport.enMode ? '搜英文' : '搜索'">搜索</span>
+                    <span x-show="recipeImport.loading">搜索中…</span>
+                  </button>
+                </div>
+              </div>
+            <p x-show="recipeImport.zhKeyword && recipeImport.enQueries.length && !recipeImport.enMode" class="fr-caption text-muted-foreground mb-2 flex flex-wrap items-center gap-x-1">
+              🔄 中文已自动转英文搜索：<span class="text-foreground" x-text="recipeImport.enQueries.slice(0,3).join('、')"></span>
+              <button type="button" @click="fillEnQuery()" class="text-primary underline underline-offset-2 hover:text-primary/80">填入英文编辑</button>
+            </p>
+            <p x-show="!recipeImport.loading && recipeImport.searched && recipeImport.results.length === 0" class="py-4 text-center text-muted-foreground fr-caption">
+              没有找到，换个关键词，或改用「粘贴导入」。
+            </p>
+            <div x-show="!recipeImport.loading && recipeImport.results.length > 0" class="space-y-2 max-h-72 overflow-y-auto pr-1">
+              <template x-for="r in recipeImport.results" :key="r.id">
+                <button type="button" @click="selectRecipe(r)" :class="recipeImport.selected && recipeImport.selected.original_title && recipeImport.selected.source_id === r.id ? 'border-[var(--fr-primary)] ring-2 ring-[var(--fr-primary)]/30' : 'border-border hover:border-[var(--fr-primary)]'"
+                        class="w-full text-left flex items-center gap-3 p-2 rounded-xl border bg-card transition-all">
+                  <img :src="r.thumb" class="w-12 h-12 rounded-lg object-cover shrink-0" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.visibility='hidden'">
+                  <span class="min-w-0 flex-1">
+                    <span class="block truncate fr-body font-medium" x-text="r.title"></span>
+                    <span class="block fr-caption text-muted-foreground" x-text="(r.area ? r.area + ' · ' : '') + (r.category || '')"></span>
+                  </span>
+                </button>
+              </template>
+            </div>
+            <div x-show="recipeImport.selected" x-transition class="mt-3 rounded-xl border border-border bg-card p-4">
+              <div class="flex items-start justify-between gap-3 mb-3">
+                <div class="min-w-0">
+                  <p class="fr-body font-semibold" x-text="recipeImport.selected.title"></p>
+                  <p class="fr-caption text-muted-foreground mt-0.5" x-show="recipeImport.selected.original_title" x-text="'原文：' + recipeImport.selected.original_title"></p>
+                </div>
+                <button type="button" @click="importSelected()" class="fr-btn fr-btn-primary h-9 text-sm shrink-0">导入此菜谱</button>
+              </div>
+              <p class="fr-label mb-1">食材</p>
+              <ul class="space-y-0.5 mb-3">
+                <template x-for="(ing,i) in recipeImport.selected.ingredients" :key="i">
+                  <li class="fr-caption" x-text="ing.name + (ing.amount ? ' ' + ing.amount : '') + (ing.unit ? ' ' + ing.unit : '')"></li>
+                </template>
+              </ul>
+              <p class="fr-label mb-1">步骤</p>
+              <ol class="space-y-1">
+                <template x-for="(st,i) in recipeImport.selected.steps" :key="i">
+                  <li class="fr-caption" x-text="(i+1) + '. ' + st.description"></li>
+                </template>
+              </ol>
+            </div>
+          </div>
+
+          <!-- 粘贴 Tab -->
+          <div x-show="recipeImport.tab==='paste'">
+            <textarea x-model="recipeImport.pasteText" rows="5" placeholder="从小红书 / 公众号 / 任意网站复制菜谱文字粘贴到这里，应用会自动拆出标题、食材和步骤后再确认导入…" class="fr-input w-full resize-y"></textarea>
+            <div class="flex items-center justify-end mt-2">
+              <button type="button" @click="doPasteParse()" :disabled="recipeImport.pasteLoading || !recipeImport.pasteText.trim()"
+                      class="fr-btn fr-btn-primary h-10 disabled:opacity-60 shrink-0">
+                <span x-show="!recipeImport.pasteLoading">解析</span>
+                <span x-show="recipeImport.pasteLoading">解析中…</span>
+              </button>
+            </div>
+            <div x-show="recipeImport.parsed && recipeImport.parsed.title" x-transition class="mt-3 rounded-xl border border-border bg-card p-4">
+              <div class="flex items-start justify-between gap-3 mb-3">
+                <div class="min-w-0">
+                  <p class="fr-body font-semibold" x-text="recipeImport.parsed.title"></p>
+                </div>
+                <button type="button" @click="importParsed()" class="fr-btn fr-btn-primary h-9 text-sm shrink-0">导入此菜谱</button>
+              </div>
+              <p class="fr-label mb-1">食材</p>
+              <ul class="space-y-0.5 mb-3">
+                <template x-for="(ing,i) in recipeImport.parsed.ingredients" :key="i">
+                  <li class="fr-caption" x-text="ing.name + (ing.amount ? ' ' + ing.amount : '') + (ing.unit ? ' ' + ing.unit : '')"></li>
+                </template>
+              </ul>
+              <p x-show="recipeImport.parsed.ingredients.length === 0" class="fr-caption text-muted-foreground mb-3">未识别出食材，导入后可手动补充。</p>
+              <p class="fr-label mb-1">步骤</p>
+              <ol class="space-y-1">
+                <template x-for="(st,i) in recipeImport.parsed.steps" :key="i">
+                  <li class="fr-caption" x-text="(i+1) + '. ' + st"></li>
+                </template>
+              </ol>
+              <p x-show="recipeImport.parsed.steps.length === 0" class="fr-caption text-muted-foreground mt-2">未识别出步骤，导入后可手动补充。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Cover upload -->
+      <section class="fr-card p-5 sm:p-6">
+        <div class="flex items-center justify-between mb-5 flex-col sm:flex-row gap-3">
+          <h2 class="fr-h2 flex items-center gap-2">
+            <i data-lucide="image" class="w-5 h-5 text-primary"></i>
+            封面图
+          </h2>
+          <div class="flex items-center gap-2 flex-wrap">
+            <button type="button" @click="openRecipeImport()" class="fr-btn fr-btn-secondary h-9 px-3 text-sm">
+              <i data-lucide="book-open" class="w-4 h-4"></i>
+              <span class="hidden sm:inline ml-1.5">导入菜谱</span>
+            </button>
+            <button type="button" @click="openImageSearch()" :disabled="imgSearch.loading" class="fr-btn fr-btn-secondary h-9 px-3 text-sm disabled:opacity-60">
+              <i data-lucide="search" class="w-4 h-4"></i>
+              <span class="hidden sm:inline ml-1.5">找图</span>
+            </button>
+          </div>
+        </div>
+        <template x-if="!form.image_path">
+          <div @dragover.prevent="dragOver = true" @dragleave.prevent="dragOver = false" @drop.prevent="onDrop($event)"
+               :class="dragOver ? 'border-[var(--fr-primary)] bg-[var(--fr-primary-soft)]' : 'border-border bg-muted/30 hover:bg-muted/60'"
+               class="border-2 border-dashed rounded-2xl p-6 text-center transition-colors cursor-pointer"
+               @click="$refs.fileInput.click()">
+            <div class="w-16 h-16 rounded-full bg-card flex items-center justify-center mx-auto mb-3 shadow-sm">
+              <i data-lucide="upload-cloud" class="w-7 h-7 text-primary"></i>
+            </div>
+            <p class="fr-body font-medium mb-1">拖拽图片到这里，或点击上传</p>
+            <p class="fr-caption text-muted-foreground">支持 JPG、PNG、WEBP，最大 5MB，建议 16:9 比例</p>
+            <input type="file" x-ref="fileInput" accept="image/jpeg,image/png,image/webp" class="hidden" @change="onFilePicked($event)">
+          </div>
+        </template>
+        <template x-if="uploading">
+          <div class="mt-4 fr-body text-muted-foreground text-center py-4">上传中…</div>
+        </template>
+        <template x-if="form.image_path">
+          <div class="mt-4 relative rounded-2xl overflow-hidden aspect-video border border-border bg-muted/10"
+               style="isolation:isolate;">
+            <img :src="form.image_path" alt="封面预览" class="w-full h-full object-contain"
+                 controlslist="nodownload nofullscreen noremoteplayback"
+                 disablePictureInPicture
+                 style="pointer-events:none; -webkit-user-drag:none; user-select:none; -webkit-touch-callout:none;"
+                 ondragstart="return false;" oncontextmenu="return false;"
+                 referrerpolicy="no-referrer">
+            <!-- 右上角 × 删除按钮：强 inline style 提升优先级，确保不被浏览器默认图片下载 overlay 覆盖 -->
+            <button type="button" @click="clearImage()"
+                    title="删除当前封面图"
+                    style="position:absolute !important; top:12px !important; right:12px !important; width:42px !important; height:42px !important;
+                           border-radius:9999px !important; z-index:9999 !important;
+                           background-color:#FFFFFF !important; color:#DC2626 !important;
+                           border:2px solid #FECACA !important;
+                           box-shadow:0 6px 20px rgba(220,38,38,0.28), 0 2px 6px rgba(0,0,0,0.15) !important;
+                           display:flex !important; align-items:center !important; justify-content:center !important;
+                           padding:0 !important; visibility:visible !important; opacity:1 !important; pointer-events:auto !important; cursor:pointer;"
+                    onmouseover="this.style.backgroundColor='#FEF2F2'; this.style.transform='scale(1.05)';"
+                    onmouseout="this.style.backgroundColor='#FFFFFF'; this.style.transform='scale(1)';">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"
+                   style="display:block !important; pointer-events:none;" aria-hidden="true">
+                <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+              </svg>
+            </button>
+            <!-- 左上角提示条：醒目告诉用户这张图是当前选中的封面 -->
+            <div style="position:absolute !important; top:12px !important; left:12px !important; z-index:9998 !important;
+                        background-color:rgba(0,0,0,0.72) !important; color:#FFFFFF !important;
+                        padding:6px 10px; border-radius:8px; font-size:12px; line-height:1.4;
+                        backdrop-filter: blur(4px); box-shadow:0 2px 10px rgba(0,0,0,0.25);">
+              ✅ 已选封面 · 点右上角 ❌ 可删除
+            </div>
+          </div>
+        </template>
+
+        <!-- 图片搜索弹层 -->
+        <div x-show="imgSearch.open" x-transition.opacity x-cloak class="mt-4 rounded-2xl border border-border bg-muted/30 p-4">
+          <div class="flex items-center justify-between mb-3">
+            <p class="fr-body font-medium">
+              候选图片<span x-show="form.title && !imgSearch.keyword" x-text="' · ' + form.title" class="text-muted-foreground"></span>
+              <span x-show="imgSearch.keyword" x-text="' · ' + imgSearch.keyword" class="text-muted-foreground"></span>
+            </p>
+            <button type="button" @click="closeImageSearch()" class="w-8 h-8 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground">
+              <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+          </div>
+
+          <!-- 关键词搜索：用户可自定义关键词重新搜索，不再强依赖食谱标题 -->
+          <div class="flex items-center gap-2 mb-3">
+            <input
+              type="text"
+              x-model="imgSearch.keyword"
+              @keydown.enter.prevent="submitKeywordSearch()"
+              placeholder="输入关键词搜网图，例如：番茄炒蛋、红烧肉、早餐三明治"
+              class="fr-input flex-1 h-10"
+            />
+            <button
+              type="button"
+              @click="submitKeywordSearch()"
+              :disabled="imgSearch.loading || !imgSearch.keyword.trim()"
+              class="fr-btn fr-btn-primary h-10 disabled:opacity-60 shrink-0"
+            >
+              <i data-lucide="search" class="w-4 h-4"></i>
+              <span x-show="!imgSearch.loading">搜索</span>
+              <span x-show="imgSearch.loading">搜索中…</span>
+            </button>
+          </div>
+
+          <div x-show="imgSearch.loading" class="py-6 text-center text-muted-foreground fr-body">搜索中…</div>
+          <div x-show="!imgSearch.loading && imgSearch.results.length === 0 && !imgSearch.hasSearched" class="py-6 text-center text-muted-foreground fr-body">
+            输入上方关键词后点「搜索」即可从 Pixabay 抓取候选图；也可以直接展开下方「手动输入链接」。
+          </div>
+          <div x-show="!imgSearch.loading && imgSearch.results.length === 0 && imgSearch.hasSearched" class="py-6 text-center text-muted-foreground fr-body">
+            没有找到图片，可以更换关键词再试，或展开下方「手动输入链接」。
+          </div>
+
+          <!-- 快捷跳对应渠道官网：API 不够准时用户直接去原站搜，复制图片 URL 到下方手动输入即可 -->
+          <div class="mb-3 fr-caption flex flex-wrap items-center justify-between gap-2">
+            <div class="inline-flex items-center gap-2">
+              <span class="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-border bg-card text-muted-foreground">
+                当前渠道：<span class="font-medium text-foreground" x-text="imgSearch.providerLabel"></span>
+              </span>
+              <button type="button" @click="switchProvider()"
+                      class="text-primary hover:underline underline-offset-2 inline-flex items-center gap-1">
+                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>切换渠道（本次临时）
+              </button>
+            </div>
+            <a :href="imgSearch.externalHref"
+               target="_blank" rel="noopener noreferrer"
+               class="text-muted-foreground hover:text-primary underline underline-offset-2 inline-flex items-center gap-1">
+              <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+              <span x-text="imgSearch.externalHint"></span>
+            </a>
+          </div>
+
+          <!-- 搜索结果：严格 3 列 × 3 行 = 每页 9 张；候选图上绝无"下载"按钮，整张卡片就是选择按钮 -->
+          <div x-show="!imgSearch.loading && imgSearch.results.length > 0"
+               class="grid grid-cols-3 gap-2 sm:gap-3">
+            <template x-for="(img, idx) in imgSearch.results"
+                      :key="'p' + imgSearch.page + '-' + idx + '-' + (img.url || '').slice(-10)">
+              <button type="button"
+                      @click="selectSearchImage(img.url)"
+                      oncontextmenu="return false;" ondragstart="return false;"
+                      class="relative aspect-square rounded-xl overflow-hidden border border-border
+                             hover:border-[var(--fr-primary)] hover:ring-2 hover:ring-[var(--fr-primary)]/30
+                             transition-all group bg-muted/30">
+                <img :src="img.thumb || img.url" alt="候选图" loading="lazy"
+                     class="w-full h-full object-cover pointer-events-none select-none"
+                     draggable="false"
+                     oncontextmenu="return false;" ondragstart="return false;"
+                     referrerpolicy="no-referrer">
+                <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                  <p class="p-1.5 text-[10px] text-white/90 text-center truncate" x-text="'选这张'"></p>
+                </div>
+              </button>
+            </template>
+          </div>
+
+          <!-- 分页控件：上一页 / 下一页，每页固定 9 张 -->
+          <div x-show="imgSearch.hasSearched && !imgSearch.loading"
+               class="flex flex-col sm:flex-row items-center justify-between mt-4 pt-3 border-t border-border gap-2">
+            <p class="fr-caption text-muted-foreground text-center sm:text-left">
+              第 <span x-text="imgSearch.page"></span> 页 · 每页 9 张
+              <span x-show="imgSearch.results.length > 0" x-text="(' · 本页 ' + imgSearch.results.length + ' 张')"></span>
+            </p>
+            <div class="flex items-center gap-2">
+              <button type="button" @click="prevPage()" :disabled="imgSearch.page <= 1 || imgSearch.loading"
+                      class="fr-btn fr-btn-ghost h-9 px-3 disabled:opacity-50 disabled:cursor-not-allowed text-sm">
+                <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                <span class="hidden sm:inline ml-1">上一页</span>
+              </button>
+              <button type="button" @click="nextPage()" :disabled="imgSearch.loading || imgSearch.results.length < 9"
+                      class="fr-btn fr-btn-ghost h-9 px-3 disabled:opacity-50 disabled:cursor-not-allowed text-sm">
+                <span class="hidden sm:inline mr-1">下一页</span>
+                <i data-lucide="chevron-right" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+          <div class="mt-3 pt-3 border-t border-border">
+            <button type="button" @click="imgSearch.manualMode = !imgSearch.manualMode" class="fr-caption text-primary hover:underline">
+              <span x-text="imgSearch.manualMode ? '↑ 收起手动输入' : '↓ 手动输入链接'"></span>
+            </button>
+            <div x-show="imgSearch.manualMode" x-transition class="mt-2 flex flex-col sm:flex-row gap-2">
+              <input type="url" x-model="imgSearch.manualUrl" placeholder="https://..." class="fr-input flex-1 min-w-0 h-10">
+              <button type="button" @click="selectSearchImage(imgSearch.manualUrl)" :disabled="!imgSearch.manualUrl.trim()" class="fr-btn fr-btn-primary h-10 disabled:opacity-60 shrink-0">使用</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Ingredients -->
+      <section class="fr-card p-5 sm:p-6">
+        <div class="flex items-center justify-between mb-5">
+          <h2 class="fr-h2 flex items-center gap-2">
+            <i data-lucide="shopping-basket" class="w-5 h-5 text-primary"></i>
+            食材
+          </h2>
+          <button type="button" @click="addIngredient()" class="fr-btn fr-btn-secondary h-9 px-3 text-sm">
+            <i data-lucide="plus" class="w-4 h-4"></i>
+            添加一行
+          </button>
+        </div>
+        <div class="space-y-3">
+          <template x-for="(ing, idx) in ingredients" :key="idx">
+            <div class="grid grid-cols-12 gap-3 items-center">
+              <div class="col-span-5">
+                <input type="text" x-model="ing.name" placeholder="名称" class="fr-input w-full h-11">
+              </div>
+              <div class="col-span-3">
+                <input type="text" x-model="ing.amount" placeholder="用量" class="fr-input w-full h-11">
+              </div>
+              <div class="col-span-3">
+                <input type="text" x-model="ing.unit" placeholder="单位" class="fr-input w-full h-11">
+              </div>
+              <div class="col-span-1 flex justify-end">
+                <button type="button" @click="removeIngredient(idx)" class="w-9 h-9 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground">
+                  <i data-lucide="trash-2" class="w-4 h-4"></i>
+                </button>
+              </div>
+            </div>
+          </template>
+        </div>
+        <p x-show="ingredients.length === 0" class="fr-caption text-muted-foreground text-center py-4">还没有添加食材</p>
+      </section>
+
+      <!-- Steps -->
+      <section class="fr-card p-5 sm:p-6">
+        <div class="flex items-center justify-between mb-5">
+          <h2 class="fr-h2 flex items-center gap-2">
+            <i data-lucide="list-ordered" class="w-5 h-5 text-primary"></i>
+            步骤
+          </h2>
+          <button type="button" @click="addStep()" class="fr-btn fr-btn-secondary h-9 px-3 text-sm">
+            <i data-lucide="plus" class="w-4 h-4"></i>
+            添加一步
+          </button>
+        </div>
+        <div class="space-y-4">
+          <template x-for="(step, idx) in steps" :key="idx">
+            <div class="flex gap-4">
+              <span class="shrink-0 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-semibold" x-text="idx + 1"></span>
+              <div class="flex-1">
+                <textarea x-model="step.description" rows="2" placeholder="描述这一步的操作…" class="fr-input w-full py-3 resize-none"></textarea>
+              </div>
+              <button type="button" @click="removeStep(idx)" class="w-9 h-9 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground self-start">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </template>
+        </div>
+        <p x-show="steps.length === 0" class="fr-caption text-muted-foreground text-center py-4">还没有添加步骤</p>
+      </section>
+    </form>
+  </main>
+
+  <!-- Bottom action bar -->
+  <div class="fixed bottom-0 left-0 right-0 bg-card border-t border-border px-4 py-4 sm:px-6 lg:px-8 z-20">
+    <div class="max-w-3xl mx-auto flex items-center justify-end gap-3">
+      <a :href="isEdit ? '/recipes/' + recipeId : '/'" class="fr-btn fr-btn-secondary">取消</a>
+      <button type="button" @click="submit()" :disabled="saving" class="fr-btn fr-btn-primary disabled:opacity-60">
+        <i data-lucide="save" class="w-5 h-5"></i>
+        <span x-show="!saving">保存食谱</span>
+        <span x-show="saving">保存中…</span>
+      </button>
+    </div>
+  </div>
+</div>
+{% endblock %}
