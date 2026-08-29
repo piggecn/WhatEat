@@ -1,4 +1,5 @@
 """Web 页面路由，渲染 Jinja2 模板。"""
+import json
 import os
 import sqlite3
 from typing import Optional
@@ -244,7 +245,7 @@ def _get_recipe(conn, user_id: int, recipe_id: int) -> Optional[dict]:
     d["steps"] = steps
 
     try:
-        d["diet_tags"] = _j.loads(d.get("diet_tags") or "[]") or []
+        d["diet_tags"] = json.loads(d.get("diet_tags") or "[]") or []
     except Exception:
         d["diet_tags"] = []
     return d

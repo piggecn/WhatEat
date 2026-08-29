@@ -308,7 +308,7 @@
         </div>
         <div class="p-4">
           <div class="flex items-start justify-between gap-2 mb-2">
-            <h3 class="fr-h3 text-lg leading-tight">{{ r.title | highlight(q) }}</h3>
+            <h3 class="fr-h3 text-lg leading-tight">{{ r.title | highlight(current_q) }}</h3>
             <span class="fr-tag shrink-0">{{ r.category or '其他' }}</span>
           </div>
           <div class="flex items-center justify-between text-muted-foreground fr-caption">
