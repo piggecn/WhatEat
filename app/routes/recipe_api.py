@@ -10,6 +10,7 @@
 import concurrent.futures as cf
 import hashlib
 import json
+import os
 import re
 import sqlite3
 import time
@@ -54,6 +55,21 @@ _HTC_SYNONYMS = (
 )
 _htc_cache: dict = {"index": None, "index_ts": 0.0, "dishes": {}}
 _HTC_INDEX_TTL = 24 * 3600
+
+# 离线全量索引（scripts/build_recipe_index.py 生成，随镜像打包）：
+# 搜索/详情优先走本地，无外网依赖；索引缺失时退回在线拉取。
+_OFFLINE_INDEX_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "recipe_index.json")
+_offline_cache: dict = {"data": None}
+
+
+def _offline_index() -> dict:
+    if _offline_cache["data"] is None:
+        try:
+            with open(_OFFLINE_INDEX_FILE, "r", encoding="utf-8") as f:
+                _offline_cache["data"] = json.load(f)
+        except Exception:
+            _offline_cache["data"] = {}
+    return _offline_cache["data"]
 
 
 def _htc_fetch(url: str, proxy_url: str = "") -> str:
@@ -162,6 +178,15 @@ def _parse_htc_recipe(md: str) -> dict:
                     "name": m.group(1).strip(),
                     "amount": m.group(2),
                     "unit": (m.group(3) or "").strip(),
+                })
+                continue
+            # 格式5：直接「名称 数量 单位」（土豆 2 个 / 食用油 300 ml / 淀粉 30 g）
+            m = re.match(r"^(.+?)\s+([\d.]+(?:-[\d.]+)?)\s*(个|只|根|片|瓣|克|g|kg|斤|两|ml|毫升|勺|汤匙|茶匙|杯|碗|块|条|朵)\s*(?:[（(].*)?$", item)
+            if m:
+                calc_ingredients.append({
+                    "name": m.group(1).strip(),
+                    "amount": m.group(2),
+                    "unit": m.group(3).strip(),
                 })
         elif section == "必备原料和工具" and ln.startswith("-"):
             name = ln[1:].strip().rstrip("、，。")
@@ -903,10 +928,18 @@ def search_recipes(
 
 def _search_howtocook(kw: str, conn) -> dict:
     proxy_url = (get_setting("proxy_url", "", conn=conn) or "").strip()
-    try:
-        dishes = _htc_index(proxy_url)
-    except Exception:
-        dishes = []
+    off = _offline_index() or {}
+    offline = (off.get("howtocook") or []) + (off.get("wikibooks") or [])
+    if offline:
+        # 离线索引已是解析后结构：{id,title,category,raw_category,area,ingredients,steps,source}
+        dishes = [{"title": d["title"], "path": d["id"], "category": d.get("raw_category", ""),
+                   "ingredients": d.get("ingredients") or [], "steps": d.get("steps") or [],
+                   "area": d.get("area", "中文菜谱库"), "source": d.get("source", "howtocook")} for d in offline]
+    else:
+        try:
+            dishes = [dict(d, area="HowToCook 中文菜谱库", source="howtocook") for d in _htc_index(proxy_url)]
+        except Exception:
+            dishes = []
     if not dishes:
         raise HTTPException(status_code=502, detail="中文菜谱库加载失败，请检查网络或代理设置")
     k = kw.strip().lower()
@@ -925,6 +958,10 @@ def _search_howtocook(kw: str, conn) -> dict:
             vc = [c for c in v if c.strip()]
             if vc and all(c in t for c in vc):
                 return 1  # 全部字符散落命中（如 番茄炒蛋→西红柿炒鸡蛋）
+        # 食材名命中（离线索引有食材，在线索引没有）
+        for ing in d.get("ingredients") or []:
+            if isinstance(ing, dict) and any(v in (ing.get("name") or "").lower() for v in variants):
+                return 2
         return None
 
     ranked = []
@@ -937,10 +974,12 @@ def _search_howtocook(kw: str, conn) -> dict:
     items = [{
         "id": d["path"],
         "title": d["title"],
-        "category": _HTC_CATEGORY_MAP.get(d["category"], "晚餐"),
-        "area": "HowToCook 中文菜谱库",
+        "category": _HTC_CATEGORY_MAP.get(d["category"], "晚餐") if d["category"] not in ("早餐", "午餐", "晚餐", "甜点", "小吃", "饮品") else d["category"],
+        "area": d.get("area") or "中文菜谱库",
         "thumb": "",
-        "source": "howtocook",
+        "source": d.get("source") or "howtocook",
+        "ingredients": d.get("ingredients") or [],
+        "steps": d.get("steps") or [],
     } for d in hits[:20]]
     return {"items": items, "zh_keyword": kw, "en_queries": [], "source": "howtocook"}
 
@@ -957,6 +996,26 @@ def _search_themealdb(kw: str, conn) -> dict:
                 seen.add(t.lower())
                 terms.append(t)
     terms = terms[:10]
+
+    offline = (_offline_index() or {}).get("themealdb") or []
+    if offline:
+        # 离线索引：本地匹配标题/食材，无需外网
+        out = []
+        out_ids = set()
+        for d in offline:
+            title = (d.get("title") or "").lower()
+            ings = " ".join((i.get("name") or "") for i in (d.get("ingredients") or [])).lower()
+            if any(t in title or t in ings for t in terms):
+                if d.get("id") not in out_ids:
+                    out_ids.add(d["id"])
+                    out.append(d)
+        print(f"[recipe-api:offline] kw={kw!r} terms={terms!r} hit={len(out)}", flush=True)
+        return {
+            "items": out[:30],
+            "zh_keyword": zh_disp if is_zh else "",
+            "en_queries": [t for t in terms if not _is_chinese(t)],
+            "source": "themealdb",
+        }
 
     meals: dict = {}
     last_err = None
@@ -1031,7 +1090,7 @@ def prepare_import(
 ):
     """把选中菜谱转成可直接填充表单的结构（可再编辑）。
     source=howtocook 时直接拉取并解析中文 Markdown，无需英转中。"""
-    if (body.source or "").strip().lower() == "howtocook":
+    if (body.source or "").strip().lower() in ("howtocook", "wikibooks"):
         return _prepare_howtocook(body, conn)
 
     if body.translate is not None:
@@ -1083,26 +1142,55 @@ def prepare_import(
 
 
 def _prepare_howtocook(body: RecipeImportBody, conn) -> dict:
-    """HowToCook：按 path 拉取 Markdown 并解析，食材/步骤已是中文，直接返回。"""
+    """中文源（HowToCook/维基食谱）：优先读离线索引，缺失时按 path 拉取 Markdown 并解析。"""
     path = (body.id or "").strip()
     if not path:
         raise HTTPException(status_code=400, detail="缺少菜谱路径")
-    proxy_url = (get_setting("proxy_url", "", conn=conn) or "").strip()
-    # 路径含中文，逐段 URL 编码后再拼接
-    path_q = "/".join(urllib.parse.quote(seg) for seg in path.split("/"))
-    md = None
-    last_err = None
-    for base in HOWTOCOOK_BASES:
-        try:
-            md = _htc_fetch(base + "/" + path_q, proxy_url)
-            if md:
-                break
-        except Exception as e:
-            last_err = f"{type(e).__name__}: {e}"
-            continue
-    if not md:
-        raise HTTPException(status_code=502, detail=f"菜谱内容拉取失败: {last_err}")
-    parsed = _parse_htc_recipe(md)
+    off = _offline_index() or {}
+    offline = (off.get("howtocook") or []) + (off.get("wikibooks") or [])
+    hit = next((d for d in offline if d.get("id") == path), None)
+    if hit and (hit.get("ingredients") or hit.get("steps")):
+        parsed = {
+            "title": hit.get("title") or "",
+            "ingredients": hit.get("ingredients") or [],
+            "steps": hit.get("steps") or [],
+        }
+        cat = (body.category or "").strip()
+        if cat not in ("早餐", "午餐", "晚餐", "甜点", "小吃", "饮品"):
+            cat = hit.get("category") or ""
+            cat = cat if cat in ("早餐", "午餐", "晚餐", "甜点", "小吃", "饮品") else "晚餐"
+        return {
+            "title": parsed["title"] or (body.title or "").strip(),
+            "category": cat,
+            "image_path": "",
+            "servings": 2,
+            "meal_tags": ["lunch", "dinner"],
+            "ingredients": [{"name": i.get("name") or "", "amount": i.get("amount") or "", "unit": i.get("unit") or ""} for i in parsed["ingredients"]],
+            "steps": [{"description": s} for s in parsed["steps"] if str(s).strip()],
+            "prep_time": None,
+            "cook_time": None,
+            "source": hit.get("source") or "howtocook",
+            "source_id": path,
+            "source_url": "",
+            "original_title": "",
+        }
+    else:
+        proxy_url = (get_setting("proxy_url", "", conn=conn) or "").strip()
+        # 路径含中文，逐段 URL 编码后再拼接
+        path_q = "/".join(urllib.parse.quote(seg) for seg in path.split("/"))
+        md = None
+        last_err = None
+        for base in HOWTOCOOK_BASES:
+            try:
+                md = _htc_fetch(base + "/" + path_q, proxy_url)
+                if md:
+                    break
+            except Exception as e:
+                last_err = f"{type(e).__name__}: {e}"
+                continue
+        if not md:
+            raise HTTPException(status_code=502, detail=f"菜谱内容拉取失败: {last_err}")
+        parsed = _parse_htc_recipe(md)
     if not parsed.get("title") and not parsed.get("steps"):
         raise HTTPException(status_code=502, detail="菜谱格式无法解析")
     title = parsed.get("title") or (body.title or "").strip()
@@ -1388,7 +1476,12 @@ def _parse_douguo(html: str) -> dict:
             ings.append({"name": name, "amount": "", "unit": ""})
     steps = []
     for block in re.finditer(r'(?is)class="stepcont[^"]*">(.*?)(?=<div class="stepcont|$)', html):
-        txt = _strip_html(block.group(1))
+        seg = block.group(1)
+        # 截断「小贴士/烹饪技巧」区，避免最后一步混入无关内容
+        cut = re.search(r'(?is)<!-- 小贴士 -->|<div class="tips">|的烹饪技巧', seg)
+        if cut:
+            seg = seg[:cut.start()]
+        txt = _strip_html(seg)
         txt = re.sub(r"^步骤\s*\d+\s*", "", txt).strip()
         if txt and len(txt) > 2:
             steps.append(txt)
