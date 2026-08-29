@@ -6,7 +6,7 @@ from app.database import get_db  # same generator; use next(get_db()) pattern
 
 ENV_PUBLIC_BASE_URL = os.getenv('PUBLIC_BASE_URL', 'http://localhost:8765').rstrip('/')
 
-APP_VERSION = "0.0.1"
+APP_VERSION = os.getenv("APP_VERSION", "0.0.1")
 
 
 def _safe_connect():
