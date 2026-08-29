@@ -22,6 +22,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     APP_VERSION=$APP_VERSION
 WORKDIR /app
+# OpenCV 运行库（OCR 用）：Debian 源换阿里云镜像，装完清理列表
+RUN sed -i 's#deb.debian.org#mirrors.tuna.tsinghua.edu.cn#g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || true;     sed -i 's#deb.debian.org#mirrors.tuna.tsinghua.edu.cn#g' /etc/apt/sources.list 2>/dev/null || true;     apt-get update -qq && apt-get install -y -qq --no-install-recommends libgl1 libglib2.0-0     && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /install /usr/local
 COPY . .
 COPY --from=css /src/static/css/tailwind.css /app/static/css/tailwind.css

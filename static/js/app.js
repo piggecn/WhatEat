@@ -554,6 +554,8 @@ function editPage(isEdit, recipeId, initialProvider) {
       selected: null,
       pasteText: '',
       pasteLoading: false,
+      ocrLoading: false,
+      ocrMsg: '',
       parsed: null,
       // 中英转换：搜索返回的英文查询词与原始中文
       enQueries: [],
@@ -743,6 +745,30 @@ function editPage(isEdit, recipeId, initialProvider) {
       if (!this.recipeImport.selected) return;
       this.applyImported(this.recipeImport.selected);
       this.closeRecipeImport();
+    },
+    async ocrUpload(ev) {
+      const f = ev.target.files && ev.target.files[0];
+      if (!f) return;
+      this.recipeImport.ocrLoading = true;
+      this.recipeImport.ocrMsg = '';
+      try {
+        const fd = new FormData();
+        fd.append('file', f);
+        const res = await RecipeApp.api('/api/ocr', { method: 'POST', body: fd });
+        if (res.ok) {
+          const d = await res.json();
+          this.recipeImport.pasteText = d.text || '';
+          this.recipeImport.ocrMsg = d.lines ? ('已识别 ' + d.lines + ' 行，点击「解析」填充表单') : '未能识别出文字，请换一张更清晰的照片';
+        } else {
+          const d = await res.json().catch(() => ({}));
+          this.recipeImport.ocrMsg = d.detail || '识别失败，请重试';
+        }
+      } catch (e) {
+        this.recipeImport.ocrMsg = '识别失败，请重试';
+      } finally {
+        this.recipeImport.ocrLoading = false;
+        if (ev.target) ev.target.value = '';
+      }
     },
     async doPasteParse() {
       const text = (this.recipeImport.pasteText || '').trim();
