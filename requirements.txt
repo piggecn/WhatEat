@@ -8,3 +8,4 @@ aiofiles==25.1.0
 pydantic==2.13.4
 Pillow==11.3.0
 rapidocr-onnxruntime==1.4.4
+edge-tts==7.2.8

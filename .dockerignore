@@ -14,11 +14,15 @@ env
 .DS_Store
 # Flutter 移动端源码不进后端镜像
 mobile
+node_modules
+build
+.gradle
+.dart_tool
+*.log
+.gitkeep
 tools
-
 .github
 README.md
 LICENSE
 docs
-
 RELEASE_NOTES.md

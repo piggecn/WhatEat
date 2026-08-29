@@ -18,6 +18,53 @@
           <i data-lucide="volume-2" class="w-4 h-4"></i>
           <span x-text="speaking ? '停止' : '朗读'"></span>
         </button>
+        <div class="relative">
+          <button type="button" @click="ttsOpen = !ttsOpen" class="fr-btn fr-btn-ghost h-10 w-10 p-0 rounded-full" aria-label="语音设置">
+            <i data-lucide="settings-2" class="w-4 h-4"></i>
+          </button>
+          <div x-show="ttsOpen" x-cloak @click.outside="ttsOpen = false"
+               class="absolute right-0 top-full mt-2 w-72 rounded-2xl bg-card border border-border shadow-2 p-4 z-50">
+            <p class="fr-label mb-3">语音设置</p>
+            <div class="space-y-3">
+              <div>
+                <label class="fr-caption text-muted-foreground mb-1 block">音色来源</label>
+                <div class="flex items-center gap-2">
+                  <button type="button" @click="voiceSource = 'local'" :class="voiceSource === 'local' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'" class="px-3 py-1.5 rounded-lg fr-caption transition-colors">本机语音</button>
+                  <button type="button" @click="voiceSource = 'edge'" :class="voiceSource === 'edge' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'" class="px-3 py-1.5 rounded-lg fr-caption transition-colors">Edge 高质量</button>
+                </div>
+              </div>
+              <div x-show="voiceSource === 'local'">
+                <label class="fr-caption text-muted-foreground mb-1 block">音色</label>
+                <select x-model="localVoiceURI" class="fr-input w-full">
+                  <template x-for="v in localVoices" :key="v.voiceURI">
+                    <option :value="v.voiceURI" x-text="v.name + ' (' + v.lang + ')'"></option>
+                  </template>
+                </select>
+                <p x-show="localVoices.length === 0" class="fr-caption text-muted-foreground mt-1">系统未找到中文语音，可改用 Edge 音色</p>
+              </div>
+              <div x-show="voiceSource === 'edge'">
+                <label class="fr-caption text-muted-foreground mb-1 block">音色</label>
+                <select x-model="edgeVoice" class="fr-input w-full">
+                  <template x-for="v in edgeVoices" :key="v.key">
+                    <option :value="v.key" x-text="v.label"></option>
+                  </template>
+                </select>
+              </div>
+              <div>
+                <label class="fr-caption text-muted-foreground mb-1 block">语速：<span x-text="rate.toFixed(2)"></span></label>
+                <input type="range" x-model.number="rate" min="0.6" max="1.4" step="0.05" class="w-full accent-[var(--fr-primary)]">
+              </div>
+              <div>
+                <label class="fr-caption text-muted-foreground mb-1 block">音调：<span x-text="pitch.toFixed(1)"></span></label>
+                <input type="range" x-model.number="pitch" min="0.6" max="1.4" step="0.1" class="w-full accent-[var(--fr-primary)]">
+              </div>
+              <label class="flex items-center gap-2 fr-caption text-muted-foreground cursor-pointer">
+                <input type="checkbox" x-model="autoSpeak" class="w-4 h-4 accent-[var(--fr-primary)] rounded">
+                切换步骤时自动朗读
+              </label>
+            </div>
+          </div>
+        </div>
         <button @click="exit()" class="fr-btn fr-btn-ghost h-10 px-4">
           <i data-lucide="x" class="w-5 h-5"></i>
           退出

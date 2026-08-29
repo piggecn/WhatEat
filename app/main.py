@@ -28,6 +28,7 @@ from app.routes import system as system_routes
 from app.routes import upload as upload_routes
 from app.routes import inventory as inventory_routes
 from app.routes import ocr as ocr_routes
+from app.routes import tts as tts_routes
 from app.routes import users as user_routes
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -196,6 +197,7 @@ app.include_router(recipe_routes.router)
 app.include_router(user_routes.router)
 app.include_router(inventory_routes.router)
 app.include_router(ocr_routes.router)
+app.include_router(tts_routes.router)
 app.include_router(upload_routes.router)
 app.include_router(meal_routes.router)
 app.include_router(calendar_routes.router)

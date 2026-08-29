@@ -288,6 +288,36 @@ function cookMode(steps) {
     timerId: null,
     get current() { return this.steps[this.idx] || null; },
     speaking: false,
+    /* 语音设置 */
+    voiceSource: 'local',           // local | edge
+    localVoices: [],
+    localVoiceURI: '',
+    edgeVoices: [
+      { key: 'xiaoxiao', label: '晓晓（温柔女声）' },
+      { key: 'xiaoyi', label: '晓伊（活泼女声）' },
+      { key: 'yunxi', label: '云希（阳光男声）' },
+      { key: 'yunyang', label: '云扬（新闻男声）' },
+      { key: 'yunjian', label: '云健（沉稳男声）' },
+    ],
+    edgeVoice: 'xiaoxiao',
+    rate: 1.0,
+    pitch: 1.0,
+    autoSpeak: true,
+    ttsOpen: false,
+    audioEl: null,
+    loadLocalVoices() {
+      if (!window.speechSynthesis) return;
+      const vs = window.speechSynthesis.getVoices() || [];
+      this.localVoices = vs.filter(v => (v.lang || '').toLowerCase().startsWith('zh'));
+      if (this.localVoices.length && !this.localVoiceURI) this.localVoiceURI = this.localVoices[0].voiceURI;
+    },
+    initTts() {
+      this.loadLocalVoices();
+      if (window.speechSynthesis) {
+        const self = this;
+        window.speechSynthesis.onvoiceschanged = () => self.loadLocalVoices();
+      }
+    },
     get timeText() {
       const m = String(Math.floor(this.seconds / 60)).padStart(2, '0');
       const sec = String(this.seconds % 60).padStart(2, '0');
@@ -296,30 +326,61 @@ function cookMode(steps) {
     start() {
       this.open = true;
       this.idx = 0;
+      this.initTts();
       this.stopTimer();
       this.seconds = 0;
       this.timerId = setInterval(() => { this.seconds += 1; }, 1000);
     },
     stopTimer() { if (this.timerId) { clearInterval(this.timerId); this.timerId = null; } },
     next() {
-      this.speakCurrent();
+      if (this.autoSpeak) this.speakCurrent();
       if (this.idx < this.steps.length - 1) this.idx += 1;
     },
     prev() { if (this.idx > 0) this.idx -= 1; },
     speakCurrent() {
-      if (!window.speechSynthesis) return;
-      window.speechSynthesis.cancel();
       const text = this.current;
       if (!text) return;
+      this.stopSpeak();
+      if (this.voiceSource === 'edge') {
+        this.speakEdge(text);
+        return;
+      }
+      if (!window.speechSynthesis) return;
       const u = new SpeechSynthesisUtterance(text);
       u.lang = 'zh-CN';
-      u.rate = 0.95;
+      u.rate = this.rate;
+      u.pitch = this.pitch;
+      const v = this.localVoices.find(x => x.voiceURI === this.localVoiceURI);
+      if (v) u.voice = v;
       u.onstart = () => { this.speaking = true; };
       u.onend = () => { this.speaking = false; };
       u.onerror = () => { this.speaking = false; };
       window.speechSynthesis.speak(u);
     },
-    stopSpeak() { if (window.speechSynthesis) window.speechSynthesis.cancel(); this.speaking = false; },
+    async speakEdge(text) {
+      try {
+        const res = await RecipeApp.api('/api/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: text, voice: this.edgeVoice, rate: this.rate, pitch: this.pitch }),
+        });
+        if (!res.ok) throw new Error('tts failed');
+        const blob = await res.blob();
+        if (!this.audioEl) this.audioEl = new Audio();
+        this.audioEl.src = URL.createObjectURL(blob);
+        this.audioEl.onplay = () => { this.speaking = true; };
+        this.audioEl.onended = () => { this.speaking = false; };
+        this.audioEl.onerror = () => { this.speaking = false; };
+        await this.audioEl.play();
+      } catch (e) {
+        this.speaking = false;
+      }
+    },
+    stopSpeak() {
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
+      if (this.audioEl) { this.audioEl.pause(); }
+      this.speaking = false;
+    },
     exit() { this.stopTimer(); this.stopSpeak(); this.open = false; },
   };
 }
