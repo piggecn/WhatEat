@@ -123,9 +123,9 @@ window.__refreshIcons = function () {
 };
 
 /* 首页：搜索 + 分类筛选 + 卡片收藏切换 + 随机推荐（初始数据服务端 Jinja 渲染） */
-function indexPage(currentCategory, currentSort) {
+function indexPage(currentCategory, currentSort, currentQ) {
   return {
-    q: '',
+    q: currentQ || '',
     searchHist: [],
     category: currentCategory || '',
     sort: currentSort || 'added_desc',

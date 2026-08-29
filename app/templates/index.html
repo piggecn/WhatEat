@@ -5,7 +5,7 @@
 {% endblock %}
 
 {% block content %}
-<div x-data="indexPage('{{ current_category }}', '{{ current_sort if current_sort else 'added_desc' }}')" class="min-h-screen">
+<div x-data='indexPage("{{ current_category }}", "{{ current_sort if current_sort else 'added_desc' }}", {{ current_q | tojson }})' class="min-h-screen">
   {% if page != 'favorites' %}
   <!-- 轮播区域 -->
   <section x-data="carouselComponent()" @mouseenter="mouseEnter()" @mouseleave="mouseLeave()" class="bg-gradient-to-br from-[var(--fr-primary-soft)] to-[var(--fr-background)] border-b border-border">
