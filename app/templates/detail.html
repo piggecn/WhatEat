@@ -14,6 +14,10 @@
       <div class="flex items-center justify-between p-4 border-b border-border">
         <p class="fr-label text-muted-foreground" x-text="(idx + 1) + ' / ' + steps.length"></p>
         <p class="fr-h3 text-primary font-mono" x-text="timeText"></p>
+        <button type="button" @click="speaking ? stopSpeak() : speakCurrent()" class="fr-btn fr-btn-ghost h-10 px-3">
+          <i data-lucide="volume-2" class="w-4 h-4"></i>
+          <span x-text="speaking ? '停止' : '朗读'"></span>
+        </button>
         <button @click="exit()" class="fr-btn fr-btn-ghost h-10 px-4">
           <i data-lucide="x" class="w-5 h-5"></i>
           退出
@@ -106,10 +110,11 @@
   <section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
       <!-- Ingredients -->
-      <div class="fr-card p-5 sm:p-6">
+      <div class="fr-card p-5 sm:p-6" x-data="{ conv: false }">
         <h2 class="fr-h2 mb-5 flex items-center gap-2">
           <i data-lucide="shopping-basket" class="w-6 h-6 text-primary"></i>
           食材清单
+          <button type="button" @click="conv = !conv" class="fr-tag ml-auto" x-text="conv ? '已换算（两/汤匙）' : '常用单位换算'"></button>
         </h2>
         <ul class="space-y-3">
           {% for ing in recipe.ingredients %}
@@ -119,7 +124,10 @@
             <label class="flex-1 fr-body cursor-pointer" :class="checked ? 'line-through text-muted-foreground' : ''">
               {{ ing.name }}
               {% if ing.amount or ing.unit %}
-              <span class="text-muted-foreground fr-caption">{{ ing.amount }}{% if ing.unit %} {{ ing.unit }}{% endif %}</span>
+              <span class="text-muted-foreground fr-caption" x-show="!conv">{{ ing.amount }}{% if ing.unit %} {{ ing.unit }}{% endif %}</span>
+              {% if ing.alt_amount %}
+              <span class="text-muted-foreground fr-caption" x-show="conv" x-cloak>{{ ing.alt_amount }} {{ ing.alt_unit }}</span>
+              {% endif %}
               {% endif %}
             </label>
           </li>

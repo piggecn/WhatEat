@@ -126,8 +126,24 @@ window.__refreshIcons = function () {
 function indexPage(currentCategory, currentSort) {
   return {
     q: '',
+    searchHist: [],
     category: currentCategory || '',
     sort: currentSort || 'added_desc',
+    init() {
+      try {
+        this.searchHist = JSON.parse(localStorage.getItem('whateat-search-history') || '[]');
+      } catch (e) { this.searchHist = []; }
+    },
+    pushSearchHistory(term) {
+      const t = (term || '').trim();
+      if (!t) return;
+      this.searchHist = [t, ...this.searchHist.filter(x => x !== t)].slice(0, 8);
+      try { localStorage.setItem('whateat-search-history', JSON.stringify(this.searchHist)); } catch (e) {}
+    },
+    clearSearchHistory() {
+      this.searchHist = [];
+      try { localStorage.removeItem('whateat-search-history'); } catch (e) {}
+    },
     /* 随机推荐弹窗状态 */
     rand: {
       open: false,
@@ -142,9 +158,17 @@ function indexPage(currentCategory, currentSort) {
       toast: '',
     },
     _randToastTimer: null,
+    get seasonTip() {
+      const m = new Date().getMonth() + 1;
+      if (m === 12 || m <= 2) return { text: '冬季时令：宜汤类·炖菜，暖身驱寒', icon: 'soup' };
+      if (m <= 5) return { text: '春季时令：宜清淡时蔬，清爽开胃', icon: 'leaf' };
+      if (m <= 8) return { text: '夏季时令：宜凉菜·冷面，消暑爽口', icon: 'sun' };
+      return { text: '秋季时令：宜滋补炖品，润燥养人', icon: 'wind' };
+    },
 
     /* 提交筛选：带参数刷新页面，服务端重新渲染列表 */
     applyFilter() {
+      this.pushSearchHistory(this.q);
       const params = new URLSearchParams();
       if (this.category) params.set('category', this.category);
       if (this.q) params.set('q', this.q);
@@ -263,6 +287,7 @@ function cookMode(steps) {
     seconds: 0,
     timerId: null,
     get current() { return this.steps[this.idx] || null; },
+    speaking: false,
     get timeText() {
       const m = String(Math.floor(this.seconds / 60)).padStart(2, '0');
       const sec = String(this.seconds % 60).padStart(2, '0');
@@ -276,9 +301,26 @@ function cookMode(steps) {
       this.timerId = setInterval(() => { this.seconds += 1; }, 1000);
     },
     stopTimer() { if (this.timerId) { clearInterval(this.timerId); this.timerId = null; } },
-    next() { if (this.idx < this.steps.length - 1) this.idx += 1; },
+    next() {
+      this.speakCurrent();
+      if (this.idx < this.steps.length - 1) this.idx += 1;
+    },
     prev() { if (this.idx > 0) this.idx -= 1; },
-    exit() { this.stopTimer(); this.open = false; },
+    speakCurrent() {
+      if (!window.speechSynthesis) return;
+      window.speechSynthesis.cancel();
+      const text = this.current;
+      if (!text) return;
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'zh-CN';
+      u.rate = 0.95;
+      u.onstart = () => { this.speaking = true; };
+      u.onend = () => { this.speaking = false; };
+      u.onerror = () => { this.speaking = false; };
+      window.speechSynthesis.speak(u);
+    },
+    stopSpeak() { if (window.speechSynthesis) window.speechSynthesis.cancel(); this.speaking = false; },
+    exit() { this.stopTimer(); this.stopSpeak(); this.open = false; },
   };
 }
 

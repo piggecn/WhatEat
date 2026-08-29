@@ -16,6 +16,40 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
 # 列表卡片缩略图：优先 /uploads/<stem>_t.webp（上传时生成），无则原图
+UNIT_CONV = {"克": ("两", 50.0), "毫升": ("汤匙", 15.0), "斤": ("公斤", 2.0)}
+
+
+def convert_amount(amount, unit):
+    """常用单位换算（克→两、毫升→汤匙、斤→公斤），无法解析返回 None。"""
+    if not amount or not unit:
+        return None
+    try:
+        v = float(str(amount).strip())
+    except ValueError:
+        return None
+    pair = UNIT_CONV.get(unit)
+    if not pair:
+        return None
+    val = v / pair[1]
+    if abs(val - round(val)) < 1e-9:
+        val = int(round(val))
+    else:
+        val = round(val, 1)
+    return {"amount": str(val), "unit": pair[0]}
+
+
+def highlight_text(text, q):
+    """搜索关键词高亮（HTML 转义后包 <mark>）。"""
+    import html as _h
+    from markupsafe import Markup
+    esc = _h.escape(str(text or ''))
+    key = (q or '').strip()
+    if not key:
+        return Markup(esc)
+    esc_k = _h.escape(key)
+    return Markup(esc.replace(esc_k, f'<mark class="bg-yellow-200/60 rounded px-0.5">{esc_k}</mark>'))
+
+
 def thumb_url(image_path: Optional[str]) -> str:
     if not image_path:
         return ""
@@ -27,6 +61,7 @@ def thumb_url(image_path: Optional[str]) -> str:
     return image_path
 
 templates.env.globals["thumb_url"] = thumb_url
+templates.env.filters["highlight"] = highlight_text
 
 # 头像渲染辅助函数：presets 路径 → emoji SVG，文件路径 → 可访问 URL
 AVATAR_EMOJI_MAP = {
@@ -196,6 +231,10 @@ def _get_recipe(conn, user_id: int, recipe_id: int) -> Optional[dict]:
     ingredients = [dict(i) for i in conn.execute(
         "SELECT name, amount, unit FROM ingredients WHERE recipe_id = ? ORDER BY id", (recipe_id,)
     ).fetchall()]
+    for ing in ingredients:
+        alt = convert_amount(ing.get("amount"), ing.get("unit"))
+        ing["alt_amount"] = alt["amount"] if alt else None
+        ing["alt_unit"] = alt["unit"] if alt else None
     steps = [dict(s) for s in conn.execute(
         "SELECT step_number, description FROM steps WHERE recipe_id = ? ORDER BY step_number", (recipe_id,)
     ).fetchall()]

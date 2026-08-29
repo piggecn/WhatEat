@@ -69,10 +69,6 @@
           <span>今天吃点啥？</span>
           <i data-lucide="shuffle" class="w-5 h-5 opacity-80"></i>
         </button>
-        <button @click="$dispatch('inventory-open')" class="fr-btn fr-btn-secondary">
-          <i data-lucide="refrigerator" class="w-4 h-4"></i>
-          我的库存
-        </button>
         {% if today_meals %}
         <!-- 今日已选菜单条（按早/午/晚分组 + 删除） -->
         <div class="w-full bg-card rounded-xl border border-border px-4 py-3"
@@ -114,6 +110,10 @@
 
   <!-- 随机推荐弹窗 -->
   <div x-show="rand.open" x-transition.opacity x-cloak class="fixed inset-0 z-50" aria-modal="true" role="dialog" @keydown.escape.window="closeRandom()">
+        <div class="px-4 py-2.5 bg-primary/10 border-b border-border flex items-center gap-2">
+          <i :data-lucide="seasonTip.icon" class="w-4 h-4 text-primary"></i>
+          <span class="fr-caption text-muted-foreground" x-text="seasonTip.text"></span>
+        </div>
     <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="closeRandom()"></div>
     <div class="absolute inset-0 flex items-center justify-center p-4" @click="closeRandom()">
       <div class="bg-card w-full max-w-lg rounded-2xl shadow-3 border border-border overflow-hidden" @click.stop>
@@ -225,6 +225,13 @@
         <div class="relative flex-1 max-w-xl">
           <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground"></i>
           <input type="text" x-model="q" @keydown.enter="applyFilter()" placeholder="搜索菜谱、食材或作者…" class="fr-input w-full pl-10" value="{{ current_q }}">
+        <div x-show="searchHist.length > 0" class="flex flex-wrap items-center gap-2 mt-2">
+          <span class="fr-caption text-muted-foreground">最近搜索</span>
+          <template x-for="(h, hi) in searchHist" :key="'h-' + hi">
+            <button type="button" @click="q = h; applyFilter()" class="fr-tag hover:border-[var(--fr-primary)] transition-colors" x-text="h"></button>
+          </template>
+          <button type="button" @click="clearSearchHistory()" class="fr-caption text-muted-foreground hover:text-[var(--fr-state-error)]">清空</button>
+        </div>
         </div>
         <div class="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 lg:pb-0">
           <button @click="selectCategory('')" :class="category === '' ? 'fr-tag' : 'fr-tag fr-tag-neutral'" class="whitespace-nowrap">全部</button>
@@ -301,7 +308,7 @@
         </div>
         <div class="p-4">
           <div class="flex items-start justify-between gap-2 mb-2">
-            <h3 class="fr-h3 text-lg leading-tight">{{ r.title }}</h3>
+            <h3 class="fr-h3 text-lg leading-tight">{{ r.title | highlight(q) }}</h3>
             <span class="fr-tag shrink-0">{{ r.category or '其他' }}</span>
           </div>
           <div class="flex items-center justify-between text-muted-foreground fr-caption">
@@ -344,49 +351,4 @@
     {% endif %}
   </main>
 </div>
-  <!-- 我的库存弹窗（独立组件，事件驱动） -->
-  <div x-data="inventoryPanel()" x-show="open" x-cloak
-       @inventory-open.window="open = true; load()"
-       class="fixed inset-0 z-50" aria-modal="true" role="dialog" @keydown.escape.window="open = false">
-    <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="open = false"></div>
-    <div class="absolute inset-0 flex items-center justify-center p-4">
-      <div class="bg-card w-full max-w-md max-h-[85vh] rounded-2xl shadow-3 border border-border overflow-hidden flex flex-col">
-        <div class="p-5 border-b border-border flex items-center justify-between">
-          <h3 class="fr-h2 flex items-center gap-2">
-            <i data-lucide="refrigerator" class="w-5 h-5 text-primary"></i>
-            我的库存
-          </h3>
-          <button @click="open = false" class="w-8 h-8 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground">
-            <i data-lucide="x" class="w-4 h-4"></i>
-          </button>
-        </div>
-        <div class="p-4 border-b border-border">
-          <div class="flex items-center gap-2">
-            <input type="text" x-model="form.name" @keydown.enter.prevent="add()" placeholder="食材名，如：鸡蛋" maxlength="50" class="fr-input flex-1">
-            <input type="text" x-model="form.amount" placeholder="数量" class="fr-input w-20">
-            <input type="text" x-model="form.unit" placeholder="单位" class="fr-input w-20">
-            <button @click="add()" :disabled="adding" class="fr-btn fr-btn-primary h-10 px-4 shrink-0">添加</button>
-          </div>
-          <p class="fr-caption text-muted-foreground mt-2">推荐时勾选「仅用现有食材」，就能只看手头能做的菜。</p>
-        </div>
-        <div class="flex-1 overflow-y-auto p-4">
-          <div x-show="loading" class="py-8 text-center fr-caption text-muted-foreground">加载中…</div>
-          <div x-show="!loading && items.length === 0" class="py-8 text-center fr-caption text-muted-foreground">库存是空的，先添加几样食材吧</div>
-          <ul class="space-y-2">
-            <template x-for="(item, idx) in items" :key="'inv-' + idx">
-              <li class="flex items-center gap-3 p-3 rounded-xl bg-muted/50">
-                <div class="flex-1">
-                  <p class="fr-body" x-text="item.name"></p>
-                  <p class="fr-caption text-muted-foreground" x-text="(item.amount || '') + (item.unit ? ' ' + item.unit : '')"></p>
-                </div>
-                <button @click="remove(item.id)" class="w-8 h-8 rounded-lg hover:bg-[var(--fr-state-error-soft)] hover:text-[var(--fr-state-error)] flex items-center justify-center text-muted-foreground">
-                  <i data-lucide="trash-2" class="w-4 h-4"></i>
-                </button>
-              </li>
-            </template>
-          </ul>
-        </div>
-      </div>
-    </div>
-  </div>
 {% endblock %}
