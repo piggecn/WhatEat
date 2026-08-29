@@ -47,7 +47,7 @@
         </nav>
 
         <!-- 右：用户头像 + 下拉菜单（管理中心[管理员]/个人中心/关于/退出） -->
-        <div class="relative shrink-0" @click.away="userOpen = false">
+        <div class="relative shrink-0 flex items-center" @click.away="userOpen = false">
           <button type="button" onclick="toggleTheme()" aria-label="切换深浅色" class="fr-btn fr-btn-ghost w-10 h-10 p-0 rounded-full mr-1">
             <i data-lucide="moon-star" class="w-5 h-5"></i>
           </button>
