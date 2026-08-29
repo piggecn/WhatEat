@@ -15,3 +15,8 @@ env
 # Flutter 移动端源码不进后端镜像
 mobile
 tools
+
+.github
+README.md
+LICENSE
+docs

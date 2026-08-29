@@ -37,6 +37,24 @@ async def lifespan(app: FastAPI):
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     os.makedirs(STATIC_DIR, exist_ok=True)
     init_db()
+    # 安全提醒：admin 仍在使用默认密码时记录告警日志（不阻断启动）
+    try:
+        from app.database import get_db as _get_db
+        from app.auth import verify_password as _vp
+        import logging as _logging
+        _conn = next(_get_db())
+        try:
+            _row = _conn.execute(
+                "SELECT password_hash FROM users WHERE username = ?", ("admin",)
+            ).fetchone()
+            if _row and _vp("admin123", _row["password_hash"]):
+                _logging.getLogger("uvicorn.error").warning(
+                    "SECURITY: admin 账号仍是默认密码 admin123，请在个人设置中修改。"
+                )
+        finally:
+            _conn.close()
+    except Exception:
+        pass
     yield
 
 
@@ -63,6 +81,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# gzip 压缩 JSON/HTML 响应，降低移动端与 Web 端流量
+from fastapi.middleware.gzip import GZipMiddleware
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 # 头像渲染辅助函数：根据 avatar 字段值决定渲染方式
 # avatar 可能是：上传路径（/uploads/xxx.jpg）、预设 key（dad/mom/...）、或空

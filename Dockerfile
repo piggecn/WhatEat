@@ -14,9 +14,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 COPY --from=builder /install /usr/local
 COPY . .
-RUN mkdir -p /app/data/uploads
+RUN useradd -r -u 1000 whateat \
+    && mkdir -p /app/data/uploads \
+    && chown -R whateat:whateat /app
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 EXPOSE 8765
-# 非 root 运行是后续安全优化项：当前 recipe_data 卷为 root 所有，切用户需配合卷迁移，先保持 root
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8765/', timeout=4).status < 400 else 1)"
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8765"]
+ENTRYPOINT ["docker-entrypoint.sh"]

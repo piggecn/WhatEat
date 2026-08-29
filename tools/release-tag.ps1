@@ -22,7 +22,11 @@ try {
     if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw "invalid version: $Version (expect X.Y.Z)" }
 
     $tag = "v$Version"
-    if (git rev-parse $tag >/dev/null 2>&1) { throw "tag $tag already exists" }
+    $ErrorActionPreference = 'Continue'
+    $null = git rev-parse -q --verify $tag 2>$null
+    $tagRc = $LASTEXITCODE
+    $ErrorActionPreference = 'Stop'
+    if ($tagRc -eq 0) { throw "tag $tag already exists" }
     if ($tags) {
         $latest = ($tags | ForEach-Object { $_ -replace '^v', '' } | Sort-Object { [version]$_ } | Select-Object -Last 1)
         if ([version]$Version -le [version]$latest) { throw "version not increasing: $Version <= $latest" }
