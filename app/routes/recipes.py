@@ -1,5 +1,6 @@
 """食谱路由 /api/recipes/*。"""
 import json as _json
+import os
 import sqlite3
 from typing import Optional
 
@@ -8,12 +9,27 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from app import models
 from app.auth import get_current_user
 from app.config import absolute_url
-from app.database import get_db
+from app.database import get_db, UPLOAD_DIR
 
 router = APIRouter(prefix="/api/recipes", tags=["recipes"])
 
 VALID_CATEGORIES = {"早餐", "午餐", "晚餐", "甜点", "小吃", "饮品"}
 VALID_MEAL_TYPES = {"breakfast", "lunch", "dinner"}
+# 忌口标签允许自定义：预设仅作为前端快捷选项，后端统一清洗（去重/限长/限量）
+DIET_TAG_MAX_LEN = 12
+DIET_TAG_MAX_COUNT = 20
+
+
+def _clean_diet_tags(tags) -> list:
+    out, seen = [], set()
+    for t in (tags or []):
+        t = str(t).strip()
+        if not t or len(t) > DIET_TAG_MAX_LEN:
+            continue
+        if t not in seen:
+            seen.add(t)
+            out.append(t)
+    return out[:DIET_TAG_MAX_COUNT]
 
 
 def _parse_meal_tags(raw: Optional[str]) -> list:
@@ -37,9 +53,39 @@ def _dump_meal_tags(tags) -> str:
     return _json.dumps(clean, ensure_ascii=False)
 
 
+def _parse_diet_tags(raw) -> list:
+    """diet_tags 列是 JSON 字符串，解析成 list。"""
+    if not raw:
+        return []
+    try:
+        v = _json.loads(raw)
+        if isinstance(v, list):
+            return _clean_diet_tags(v)
+    except Exception:
+        pass
+    return []
+
+
+def _dump_diet_tags(tags) -> str:
+    """序列化 diet_tags list 为 JSON 字符串（无有效标签返回空串）。"""
+    clean = _clean_diet_tags(tags)
+    return _json.dumps(clean, ensure_ascii=False) if clean else ""
+
+
+def _thumb_url(image_path):
+    """列表项优先使用上传时生成的缩略图（不存在则回退原图）。"""
+    if not image_path:
+        return absolute_url(None)
+    stem = os.path.splitext(image_path)[0]
+    cand = stem + "_t.webp"
+    if os.path.isfile(os.path.join(UPLOAD_DIR, os.path.basename(cand))):
+        return absolute_url(cand)
+    return absolute_url(image_path)
+
+
 def _enrich_recipe(item: dict) -> dict:
     """给 recipe dict 附加 image_url 和 (可能的) author_avatar_url。"""
-    item["image_url"] = absolute_url(item.get("image_path"))
+    item["image_url"] = _thumb_url(item.get("image_path"))
     av = item.get("author_avatar")
     if isinstance(av, str) and av.startswith("/uploads/"):
         item["author_avatar_url"] = absolute_url(av)
@@ -53,6 +99,7 @@ def _row_to_item(row: sqlite3.Row) -> dict:
         "description": row["description"],
         "category": row["category"],
         "meal_tags": _parse_meal_tags(row["meal_tags"] if "meal_tags" in row.keys() else None),
+        "diet_tags": _parse_diet_tags(row["diet_tags"] if "diet_tags" in row.keys() else None),
         "image_path": row["image_path"],
         "prep_time": row["prep_time"],
         "cook_time": row["cook_time"],
@@ -99,7 +146,7 @@ def list_recipes(
         # 向后兼容：无分页参数时返回纯列表，无包装
         rows = db.execute(
             f"""
-            SELECT r.id, r.title, r.description, r.category, r.meal_tags, r.image_path,
+            SELECT r.id, r.title, r.description, r.category, r.meal_tags, r.diet_tags, r.image_path,
                    r.prep_time, r.cook_time, r.created_at,
                    u.username AS author,
                    u.display_name AS author_display_name,
@@ -129,7 +176,7 @@ def list_recipes(
     offset = (eff_page - 1) * eff_limit
     rows = db.execute(
         f"""
-        SELECT r.id, r.title, r.description, r.category, r.meal_tags, r.image_path,
+        SELECT r.id, r.title, r.description, r.category, r.meal_tags, r.diet_tags, r.image_path,
                r.prep_time, r.cook_time, r.created_at,
                u.username AS author,
                u.display_name AS author_display_name,
@@ -167,7 +214,7 @@ def list_favorites(
     offset = (page - 1) * page_size
     rows = db.execute(
         """
-        SELECT r.id, r.title, r.description, r.category, r.meal_tags, r.image_path,
+        SELECT r.id, r.title, r.description, r.category, r.meal_tags, r.diet_tags, r.image_path,
                r.prep_time, r.cook_time, r.created_at,
                u.username AS author,
                u.display_name AS author_display_name,
@@ -228,6 +275,7 @@ def get_recipe(
         "description": row["description"],
         "category": row["category"],
         "meal_tags": _parse_meal_tags(row["meal_tags"] if "meal_tags" in row.keys() else None),
+        "diet_tags": _parse_diet_tags(row["diet_tags"] if "diet_tags" in row.keys() else None),
         "servings": row["servings"],
         "prep_time": row["prep_time"],
         "cook_time": row["cook_time"],
@@ -258,14 +306,15 @@ def create_recipe(
 
     cur = db.execute(
         """
-        INSERT INTO recipes (title, description, category, meal_tags, servings, prep_time, cook_time, image_path, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO recipes (title, description, category, meal_tags, diet_tags, servings, prep_time, cook_time, image_path, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             body.title,
             body.description,
             body.category,
             _dump_meal_tags(meal_tags),
+            _dump_diet_tags(body.diet_tags),
             body.servings,
             body.prep_time,
             body.cook_time,
@@ -329,7 +378,7 @@ def update_recipe(
 
     db.execute(
         """
-        UPDATE recipes SET title=?, description=?, category=?, meal_tags=?, servings=?, prep_time=?,
+        UPDATE recipes SET title=?, description=?, category=?, meal_tags=?, diet_tags=?, servings=?, prep_time=?,
         cook_time=?, image_path=?, updated_at=CURRENT_TIMESTAMP WHERE id=?
         """,
         (
@@ -337,6 +386,7 @@ def update_recipe(
             body.description,
             body.category,
             _dump_meal_tags(meal_tags),
+            _dump_diet_tags(body.diet_tags),
             body.servings,
             body.prep_time,
             body.cook_time,

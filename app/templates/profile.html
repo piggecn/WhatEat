@@ -125,6 +125,35 @@
         </div>
       </div>
     </section>
+
+    <!-- 我的忌口 -->
+    <section class="fr-card p-5 sm:p-6 mt-6">
+      <h2 class="fr-h2 mb-2 flex items-center gap-2">
+        <i data-lucide="shield-alert" class="w-5 h-5 text-primary"></i>我的忌口
+      </h2>
+      <p class="fr-body text-muted-foreground mb-4">选中的标签会在「今天吃点啥」随机推荐时自动排除。</p>
+      <div class="flex flex-wrap gap-2 mb-3">
+        <template x-for="t in AVOID_TAGS" :key="'p-' + t">
+          <button type="button" @click="toggleAvoidTag(t)" x-text="t"
+                  :class="form.avoid_tags.includes(t) ? 'border-[var(--fr-primary)] bg-[var(--fr-primary-soft)] text-primary ring-2 ring-[var(--fr-primary)]/30' : 'border-border bg-muted/40 text-muted-foreground hover:border-muted-foreground/30'"
+                  class="rounded-full border px-4 py-2 text-sm transition-all"></button>
+        </template>
+      </div>
+      <div class="flex flex-wrap gap-2 mb-3">
+        <template x-for="t in form.avoid_tags.filter(x => !AVOID_TAGS.includes(x))" :key="'c-' + t">
+          <span class="inline-flex items-center gap-1 rounded-full border border-[var(--fr-primary)] bg-[var(--fr-primary-soft)] text-primary px-3 py-1.5 text-sm">
+            <span x-text="t"></span>
+            <button type="button" @click="removeAvoidTag(t)" class="text-muted-foreground hover:text-[var(--fr-state-error)] leading-none">×</button>
+          </span>
+        </template>
+      </div>
+      <div class="flex items-center gap-2">
+        <input type="text" x-model="avoidCustom" @keydown.enter.prevent="addAvoidTag()"
+               placeholder="自定义忌口，如：香菜、内脏（回车添加）" maxlength="12"
+               class="fr-input flex-1">
+        <button type="button" @click="addAvoidTag()" class="fr-btn fr-btn-secondary h-10 px-4">添加</button>
+      </div>
+    </section>
   </form>
 
   <!-- 修改密码 -->

@@ -295,3 +295,6 @@ body {
 
 /* 图片防拖拽光晕 */
 img { -webkit-user-drag: none; user-select: none; }
+
+/* 日历网格性能：跳过视口外单元格的布局与绘制 */
+.cal-cell { content-visibility: auto; contain-intrinsic-size: auto 100px; }

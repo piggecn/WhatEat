@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app import models
 from app.auth import get_current_user
+from app.routes.recipes import _parse_diet_tags, _dump_diet_tags
 from app.config import absolute_url
 from app.database import get_db
 
@@ -33,6 +34,7 @@ def get_profile(
         "is_admin": bool(user["is_admin"]),
         "carousel_type": user["carousel_type"] or "most_cooked",
         "carousel_limit": user["carousel_limit"] or 10,
+        "avoid_tags": _parse_diet_tags(user["avoid_tags"] if "avoid_tags" in user.keys() else None),
     })
 
 
@@ -70,6 +72,10 @@ def update_profile(
         updates.append("carousel_type = ?")
         params.append(body.carousel_type)
 
+    if body.avoid_tags is not None:
+        updates.append("avoid_tags = ?")
+        params.append(_dump_diet_tags(body.avoid_tags))
+
     if body.carousel_limit is not None:
         if not (5 <= body.carousel_limit <= 20):
             raise HTTPException(status_code=400, detail="carousel_limit 必须在 5-20 之间")
@@ -91,4 +97,5 @@ def update_profile(
         "is_admin": bool(r["is_admin"]),
         "carousel_type": r["carousel_type"] or "most_cooked",
         "carousel_limit": r["carousel_limit"] or 10,
+        "avoid_tags": _parse_diet_tags(r["avoid_tags"] if "avoid_tags" in r.keys() else None),
     })

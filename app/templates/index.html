@@ -275,7 +275,7 @@
       <a href="/recipes/{{ r.id }}" class="fr-card group overflow-hidden block transition-transform hover:-translate-y-1">
         <div class="relative aspect-[16/10] overflow-hidden">
           {% if r.image_path %}
-          <img src="{{ r.image_path }}" alt="{{ r.title }}" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105">
+          <img src="{{ thumb_url(r.image_path) }}" alt="{{ r.title }}" loading="lazy" decoding="async" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105">
           {% else %}
           <div class="w-full h-full bg-gradient-to-br from-[var(--fr-primary)] to-[var(--fr-state-success)] flex items-center justify-center">
             <i data-lucide="chef-hat" class="w-12 h-12 text-white/80"></i>

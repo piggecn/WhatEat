@@ -15,6 +15,19 @@ router = APIRouter(tags=["pages"])
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
+# 列表卡片缩略图：优先 /uploads/<stem>_t.webp（上传时生成），无则原图
+def thumb_url(image_path: Optional[str]) -> str:
+    if not image_path:
+        return ""
+    from app.database import UPLOAD_DIR as _UP
+    stem = os.path.splitext(image_path)[0]
+    cand = stem + "_t.webp"
+    if os.path.isfile(os.path.join(_UP, os.path.basename(cand))):
+        return cand
+    return image_path
+
+templates.env.globals["thumb_url"] = thumb_url
+
 # 头像渲染辅助函数：presets 路径 → emoji SVG，文件路径 → 可访问 URL
 AVATAR_EMOJI_MAP = {
     "爸爸": "👨", "妈妈": "👩", "爷爷": "👴", "奶奶": "👵",
@@ -168,7 +181,7 @@ def _list_favorites(conn, user_id: int, category=None, q=None, sort: str = "adde
 def _get_recipe(conn, user_id: int, recipe_id: int) -> Optional[dict]:
     row = conn.execute(
         """
-        SELECT r.id, r.title, r.description, r.category, r.servings,
+        SELECT r.id, r.title, r.description, r.category, r.servings, r.diet_tags,
                r.prep_time, r.cook_time, r.image_path, r.created_at, r.updated_at,
                u.username AS author, u.display_name AS author_display_name, u.avatar AS author_avatar,
                EXISTS(SELECT 1 FROM favorites f WHERE f.user_id = ? AND f.recipe_id = r.id) AS is_favorite
@@ -190,6 +203,10 @@ def _get_recipe(conn, user_id: int, recipe_id: int) -> Optional[dict]:
     d["is_favorite"] = bool(d["is_favorite"])
     d["ingredients"] = ingredients
     d["steps"] = steps
+    try:
+        d["diet_tags"] = _j.loads(d.get("diet_tags") or "[]") or []
+    except Exception:
+        d["diet_tags"] = []
     return d
 
 

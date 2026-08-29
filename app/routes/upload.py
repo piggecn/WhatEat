@@ -34,8 +34,23 @@ async def upload_image(
     ext = os.path.splitext(file.filename or "")[1].lower()
     if ext not in ALLOWED_EXT:
         ext = ".jpg"
-    filename = f"{uuid.uuid4().hex}{ext}"
+    stem = uuid.uuid4().hex
+    filename = f"{stem}{ext}"
     path = os.path.join(UPLOAD_DIR, filename)
     with open(path, "wb") as f:
         f.write(data)
-    return {"path": f"/uploads/{filename}"}
+
+    # 生成缩略图（列表页使用，减少流量）；PIL 不可用时静默跳过
+    thumb_path = None
+    try:
+        from PIL import Image, ImageOps
+        img = Image.open(path)
+        img = ImageOps.exif_transpose(img)
+        img.thumbnail((480, 480))
+        tname = f"{stem}_t.webp"
+        img.convert("RGB").save(os.path.join(UPLOAD_DIR, tname), "WEBP", quality=82)
+        thumb_path = f"/uploads/{tname}"
+    except Exception:
+        pass
+
+    return {"path": f"/uploads/{filename}", "thumb_path": thumb_path}

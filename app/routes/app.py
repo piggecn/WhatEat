@@ -24,6 +24,41 @@ router = APIRouter(prefix="/api/app", tags=["app"])
 
 _GH_ENDPOINT = "https://api.github.com/repos/{repo}/releases/latest"
 _CACHE: dict = {"ts": 0.0, "data": None}
+
+
+def _md_to_html(text: str) -> str:
+    """把 GitHub Release 的 Markdown 正文转成安全的内联 HTML（先转义再渲染）。"""
+    import html as _html
+    out = []
+    in_list = False
+    for raw in (text or "").splitlines():
+        line = raw.rstrip()
+        if not line.strip():
+            if in_list:
+                out.append("</ul>")
+                in_list = False
+            continue
+        esc = _html.escape(line)
+        if line.startswith("## "):
+            if in_list:
+                out.append("</ul>")
+                in_list = False
+            out.append(f'<h3 class="font-medium text-foreground mt-3 mb-1">{esc[3:]}</h3>')
+        elif line.startswith("# "):
+            out.append(f'<h2 class="font-semibold text-foreground mt-3 mb-1">{esc[2:]}</h2>')
+        elif line.strip().startswith("- "):
+            if not in_list:
+                out.append('<ul class="list-disc pl-5 space-y-1">')
+                in_list = True
+            out.append(f"<li>{esc[line.find('-') + 2:]}</li>")
+        else:
+            if in_list:
+                out.append("</ul>")
+                in_list = False
+            out.append(f"<p>{esc}</p>")
+    if in_list:
+        out.append("</ul>")
+    return "".join(out)
 _CACHE_TTL = 1800  # 30 分钟
 _security = HTTPBearer(auto_error=False)
 
@@ -79,6 +114,7 @@ def app_check(force: bool = False, conn: sqlite3.Connection = Depends(get_db)):
             "version": (d.get("tag_name") or "").lstrip("v"),
             "name": d.get("name") or "",
             "notes": d.get("body") or "",
+            "notes_html": _md_to_html(d.get("body") or ""),
             "published_at": d.get("published_at") or "",
             "pre_release": bool(d.get("prerelease")),
             "assets": assets,

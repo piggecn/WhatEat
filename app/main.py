@@ -128,6 +128,15 @@ pages.templates.env.globals["APP_VERSION"] = _APP_VERSION
 @app.middleware("http")
 async def no_cache_html(request, call_next):
     response = await call_next(request)
+    path = request.url.path
+    # 静态资源长缓存（css/js 需带版本哈希；当前统一 1 天缓存便于迭代）
+    if path.startswith("/static/") and not path.endswith((".html",)):
+        response.headers["Cache-Control"] = "public, max-age=86400"
+        return response
+    # 上传文件名为 UUID 不可变：一年缓存
+    if path.startswith("/uploads/"):
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        return response
     ct = response.headers.get("content-type", "")
     if "text/html" in ct or "javascript" in ct:
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"

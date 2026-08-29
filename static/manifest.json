@@ -1,0 +1,14 @@
+{
+  "name": "今天吃点啥",
+  "short_name": "吃点啥",
+  "description": "家庭菜谱与每周用餐计划",
+  "lang": "zh-CN",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#faf7f2",
+  "theme_color": "#e07a3f",
+  "icons": [
+    { "src": "/static/logo.png", "sizes": "any", "type": "image/png", "purpose": "any" }
+  ]
+}

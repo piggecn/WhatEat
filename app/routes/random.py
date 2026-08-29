@@ -10,6 +10,7 @@ from app import models
 from app.auth import get_current_user
 from app.config import absolute_url
 from app.database import get_db
+from app.routes.recipes import _parse_diet_tags
 
 router = APIRouter(prefix="/api/recipes", tags=["random"])
 
@@ -84,6 +85,10 @@ def get_random_recipe(
 
     total_count = int(db.execute("SELECT COUNT(*) AS c FROM recipes").fetchone()["c"] or 0)
 
+    # 当前用户的忌口标签（用于排除）
+    urow = db.execute("SELECT avoid_tags FROM users WHERE id = ?", (user["id"],)).fetchone()
+    avoid = _parse_diet_tags(urow["avoid_tags"]) if urow else []
+
     # 食谱数 < 5 自动放宽排除条件
     eff_exclude = exclude_recent_days if total_count >= 5 else 0
 
@@ -108,13 +113,15 @@ def get_random_recipe(
     fallback_level = 0
     for idx, (cat, mt, ed) in enumerate(ordered):
         fallback_level = idx
-        row = _try_one(db, user["id"], cat, mt, ed)
+        row = _try_one(db, user["id"], cat, mt, ed, avoid)
         if row:
             break
 
     if not row:
         # 根据是否有筛选条件给出不同提示
-        if category or meal_type:
+        if avoid and total_count > 0:
+            msg = "按你的忌口设置，这个条件下没有可选的食谱了"
+        elif category or meal_type:
             msg = "这个条件下没有可选的食谱了"
         elif total_count == 0:
             msg = "食谱库里还没有食谱，先去添加一道吧"
@@ -168,7 +175,7 @@ def get_random_recipe(
     })
 
 
-def _try_one(db: sqlite3.Connection, user_id: int, category: Optional[str], meal_type: Optional[str], exclude_days: int):
+def _try_one(db: sqlite3.Connection, user_id: int, category: Optional[str], meal_type: Optional[str], exclude_days: int, avoid: Optional[list] = None):
     where = []
     params: list = []
     if category:
@@ -184,7 +191,7 @@ def _try_one(db: sqlite3.Connection, user_id: int, category: Optional[str], meal
         )
         params.extend([user_id, cutoff])
     where_sql = (" WHERE " + " AND ".join(where)) if where else ""
-    return db.execute(
+    rows = db.execute(
         f"""
         SELECT r.*, u.username AS author, u.display_name AS author_display_name, u.avatar AS author_avatar,
                EXISTS(SELECT 1 FROM favorites f WHERE f.user_id = ? AND f.recipe_id = r.id) AS is_favorite
@@ -192,7 +199,14 @@ def _try_one(db: sqlite3.Connection, user_id: int, category: Optional[str], meal
         JOIN users u ON u.id = r.created_by
         {where_sql}
         ORDER BY RANDOM()
-        LIMIT 1
+        LIMIT 12
         """,
         [user_id] + params,
-    ).fetchone()
+    ).fetchall()
+    # 忌口过滤：从候选里挑第一条不冲突的
+    for r in rows:
+        dt = _parse_diet_tags(r["diet_tags"] if "diet_tags" in r.keys() else None)
+        if avoid and (set(dt) & set(avoid)):
+            continue
+        return r
+    return None

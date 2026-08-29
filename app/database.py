@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS users (
     is_admin        INTEGER DEFAULT 0,
     carousel_type   TEXT DEFAULT 'most_cooked',
     carousel_limit  INTEGER DEFAULT 10,
+    avoid_tags      TEXT,
     created_at      TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -37,6 +38,7 @@ CREATE TABLE IF NOT EXISTS recipes (
     description TEXT,
     category    TEXT,
     meal_tags   TEXT,
+    diet_tags   TEXT,
     servings    INTEGER DEFAULT 2,
     prep_time   INTEGER,
     cook_time   INTEGER,
@@ -84,8 +86,7 @@ CREATE TABLE IF NOT EXISTS meal_plans (
     date       TEXT NOT NULL,           -- YYYY-MM-DD
     meal_type  TEXT NOT NULL,           -- breakfast/lunch/dinner
     is_planned INTEGER DEFAULT 1,       -- 1=预定 0=已完成
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(user_id, date, meal_type)
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS translations (
@@ -145,6 +146,12 @@ def init_db() -> None:
     if not _column_exists(conn, "recipes", "meal_tags"):
         conn.execute("ALTER TABLE recipes ADD COLUMN meal_tags TEXT")
         conn.commit()
+    if not _column_exists(conn, "recipes", "diet_tags"):
+        conn.execute("ALTER TABLE recipes ADD COLUMN diet_tags TEXT")
+        conn.commit()
+    if not _column_exists(conn, "users", "avoid_tags"):
+        conn.execute("ALTER TABLE users ADD COLUMN avoid_tags TEXT")
+        conn.commit()
     # meal_tags 数据迁移：根据 category 推导默认值
     for row in conn.execute(
         "SELECT id, category FROM recipes WHERE meal_tags IS NULL OR meal_tags = ''"
@@ -168,6 +175,28 @@ def init_db() -> None:
                 (_json.dumps(tags, ensure_ascii=False), row["id"]),
             )
     conn.commit()
+
+    # ---- meal_plans 迁移：去掉 UNIQUE(user_id,date,meal_type)，支持每餐多道菜 ----
+    try:
+        sql = conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='meal_plans'").fetchone()
+        if sql and "UNIQUE" in (sql["sql"] or "").upper():
+            conn.executescript(
+                "CREATE TABLE meal_plans_new ("
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                "user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, "
+                "recipe_id INTEGER REFERENCES recipes(id) ON DELETE CASCADE, "
+                "date TEXT NOT NULL, "
+                "meal_type TEXT NOT NULL, "
+                "is_planned INTEGER DEFAULT 1, "
+                "created_at TEXT DEFAULT CURRENT_TIMESTAMP);"
+                "INSERT INTO meal_plans_new (id,user_id,recipe_id,date,meal_type,is_planned,created_at) "
+                "SELECT id,user_id,recipe_id,date,meal_type,is_planned,created_at FROM meal_plans;"
+                "DROP TABLE meal_plans;"
+                "ALTER TABLE meal_plans_new RENAME TO meal_plans;"
+            )
+            conn.commit()
+    except Exception:
+        pass
 
     # ---- system_settings 表 ----
     conn.execute(

@@ -38,45 +38,65 @@
         </button>
       </div>
 
-      <!-- 7列网格 -->
-      <div class="grid grid-cols-7 gap-3">
+      <!-- 周网格：首列为餐次标签，7 列按天，每餐支持多道菜 -->
+      <div class="grid grid-cols-8 gap-2">
         <!-- 星期头 -->
+        <div></div>
         <template x-for="(day, dIdx) in weekDays" :key="'header-' + dIdx">
           <div class="text-center">
             <div class="fr-label text-muted-foreground mb-2" x-text="day.weekdayName"></div>
             <div class="fr-h3" :class="day.isToday ? 'text-primary' : ''" x-text="day.dayNum"></div>
           </div>
         </template>
-        <!-- 早/午/晚 三行 -->
-        <template x-for="mealType in ['breakfast', 'lunch', 'dinner']" :key="'mealrow-' + mealType">
-          <template x-for="(day, dIdx) in weekDays" :key="mealType + '-' + dIdx">
-            <div class="min-h-[100px]">
-              <template x-if="!day[mealType]">
-                <button @click="openPicker(day.date, mealType)" class="w-full h-full min-h-[100px] rounded-xl border-2 border-dashed border-border hover:border-[var(--fr-primary)] hover:bg-[var(--fr-primary-soft)]/30 flex items-center justify-center text-muted-foreground hover:text-[var(--fr-primary)] transition-colors">
-                  <i data-lucide="plus" class="w-5 h-5"></i>
-                </button>
-              </template>
-              <template x-if="day[mealType]">
-                <div @click="cancelPlan(day.date, mealType)" class="w-full h-full min-h-[100px] rounded-xl border border-border bg-card overflow-hidden cursor-pointer hover:shadow-md transition-shadow fr-card group">
-                  <div class="relative aspect-[16/10] overflow-hidden">
-                    <img x-show="day[mealType].image_path" :src="day[mealType].image_path" :alt="day[mealType].title" class="w-full h-full object-cover">
-                    <div x-show="!day[mealType].image_path" class="w-full h-full bg-gradient-to-br from-[var(--fr-primary)] to-[var(--fr-state-success)] flex items-center justify-center">
-                      <i data-lucide="chef-hat" class="w-6 h-6 text-white/80"></i>
-                    </div>
-                  </div>
-                  <div class="p-2">
-                    <p class="fr-caption font-medium truncate" x-text="day[mealType].title"></p>
-                  </div>
-                  <div class="absolute inset-0 bg-black/0 group-hover:bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <span class="text-white fr-caption flex items-center gap-1">
-                      <i data-lucide="x" class="w-3.5 h-3.5"></i>
-                      点击取消
-                    </span>
-                  </div>
+        <!-- 早/午/晚 三行（扁平网格：标签 + 7 天，单层循环避免 Alpine 嵌套模板问题） -->
+        <template x-for="(cell, ci) in weekGrid" :key="'g-' + ci">
+          <div class="contents">
+            <template x-if="cell.type === 'label'">
+              <div class="flex items-center justify-center min-h-[100px]">
+                <div class="flex flex-col items-center gap-1.5 rounded-xl bg-muted/40 px-3 py-2 w-full max-w-[72px]">
+                  <i :data-lucide="cell.icon" class="w-4 h-4 text-primary"></i>
+                  <span class="fr-caption text-muted-foreground whitespace-nowrap" x-text="cell.label"></span>
                 </div>
-              </template>
-            </div>
-          </template>
+              </div>
+            </template>
+            <template x-if="cell.type === 'day'">
+              <div class="min-h-[100px] cal-cell">
+                <template x-if="!weekDays[cell.idx] || !weekDays[cell.idx][cell.rowKey] || weekDays[cell.idx][cell.rowKey].length === 0">
+                  <button @click="openPicker(weekDays[cell.idx].date, cell.rowKey)" :aria-label="weekDays[cell.idx].date + ' ' + cell.rowLabel + ' 添加计划'" class="w-full h-full min-h-[88px] rounded-xl border border-dashed border-border/70 hover:border-[var(--fr-primary)] hover:bg-[var(--fr-primary-soft)]/20 flex flex-col items-center justify-center gap-0.5 text-muted-foreground hover:text-[var(--fr-primary)] transition-colors">
+                    <i data-lucide="plus" class="w-4 h-4"></i>
+                    <span class="fr-caption" x-text="cell.rowLabel"></span>
+                  </button>
+                </template>
+                <template x-if="weekDays[cell.idx] && weekDays[cell.idx][cell.rowKey] && weekDays[cell.idx][cell.rowKey].length > 0">
+                  <div class="space-y-1.5">
+                    <button @click="openPicker(weekDays[cell.idx].date, cell.rowKey)" class="w-full min-h-[30px] rounded-lg border border-dashed border-border/70 hover:border-[var(--fr-primary)] hover:bg-[var(--fr-primary-soft)]/20 flex items-center justify-center gap-1 text-muted-foreground hover:text-[var(--fr-primary)] transition-colors">
+                      <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                      <span class="fr-caption">再加一道</span>
+                    </button>
+                    <template x-for="(dish, di) in weekDays[cell.idx][cell.rowKey]" :key="cell.rowKey + '-' + cell.idx + '-' + di">
+                      <div @click="cancelPlan(weekDays[cell.idx].date, cell.rowKey, dish.recipe_id)" class="relative w-full min-h-[100px] rounded-xl border border-border bg-card overflow-hidden cursor-pointer hover:shadow-md transition-shadow fr-card group">
+                        <div class="relative aspect-[16/9] overflow-hidden">
+                          <img x-show="dish.image_path" :src="dish.image_path" :alt="dish.title" loading="lazy" decoding="async" class="w-full h-full object-cover">
+                          <div x-show="!dish.image_path" class="w-full h-full bg-gradient-to-br from-[var(--fr-primary)] to-[var(--fr-state-success)] flex items-center justify-center">
+                            <i data-lucide="chef-hat" class="w-5 h-5 text-white/80"></i>
+                          </div>
+                        </div>
+                        <div class="p-1.5">
+                          <p class="fr-caption font-medium truncate" x-text="dish.title"></p>
+                        </div>
+                        <div class="absolute inset-0 bg-black/0 group-hover:bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <span class="text-white fr-caption flex items-center gap-1">
+                            <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                            点击取消
+                          </span>
+                        </div>
+                      </div>
+                    </template>
+                  </div>
+                </template>
+              </div>
+            </template>
+          </div>
         </template>
       </div>
 
@@ -116,7 +136,7 @@
       <!-- 月历网格 -->
       <div class="grid grid-cols-7 gap-2">
         <template x-for="(d, dIdx) in monthDays" :key="'md-' + dIdx">
-          <div class="min-h-[100px] rounded-xl border border-border p-2 transition-colors"
+          <div class="min-h-[100px] rounded-xl border border-border p-2 transition-colors cal-cell"
                :class="d.inMonth ? 'bg-card hover:shadow-sm cursor-pointer' : 'bg-muted/20 opacity-40'"
                @click="d.inMonth && (d.expanded = !d.expanded)">
             <div class="flex items-center justify-between mb-2">
@@ -130,22 +150,22 @@
             </div>
             <!-- 展开详情 -->
             <div x-show="d.expanded && d.hasMeals" x-transition class="space-y-1 mt-2 pt-2 border-t border-border">
-              <template x-if="d.breakfast">
+              <template x-for="dish in d.breakfast" :key="'b-' + dish.recipe_id">
                 <div class="flex items-center gap-2 fr-caption">
                   <span class="w-2 h-2 rounded-full bg-orange-400 shrink-0"></span>
-                  <span class="truncate" x-text="(d.breakfast.title || '') + '（早）'"></span>
+                  <span class="truncate" x-text="dish.title + '（早）'"></span>
                 </div>
               </template>
-              <template x-if="d.lunch">
+              <template x-for="dish in d.lunch" :key="'l-' + dish.recipe_id">
                 <div class="flex items-center gap-2 fr-caption">
                   <span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
-                  <span class="truncate" x-text="(d.lunch.title || '') + '（午）'"></span>
+                  <span class="truncate" x-text="dish.title + '（午）'"></span>
                 </div>
               </template>
-              <template x-if="d.dinner">
+              <template x-for="dish in d.dinner" :key="'d-' + dish.recipe_id">
                 <div class="flex items-center gap-2 fr-caption">
                   <span class="w-2 h-2 rounded-full bg-violet-500 shrink-0"></span>
-                  <span class="truncate" x-text="(d.dinner.title || '') + '（晚）'"></span>
+                  <span class="truncate" x-text="dish.title + '（晚）'"></span>
                 </div>
               </template>
             </div>
@@ -191,7 +211,7 @@
             <template x-for="r in pickerResults" :key="r.id">
               <button @click="selectRecipe(r.id)" class="fr-card overflow-hidden text-left hover:-translate-y-0.5 transition-transform">
                 <div class="relative aspect-[16/10] overflow-hidden">
-                  <img x-show="r.image_path" :src="r.image_path" :alt="r.title" class="w-full h-full object-cover">
+                  <img x-show="r.image_path" :src="r.image_path" :alt="r.title" loading="lazy" decoding="async" class="w-full h-full object-cover">
                   <div x-show="!r.image_path" class="w-full h-full bg-gradient-to-br from-[var(--fr-primary)] to-[var(--fr-state-success)] flex items-center justify-center">
                     <i data-lucide="chef-hat" class="w-8 h-8 text-white/80"></i>
                   </div>
@@ -225,6 +245,12 @@
             <i data-lucide="x" class="w-4 h-4"></i>
           </button>
         </div>
+        <div class="px-5 pt-4 border-b border-border">
+          <div class="flex items-center gap-2">
+            <button @click="shoppingMode = 'merged'" :class="shoppingMode === 'merged' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'" class="px-4 py-2 rounded-lg fr-caption transition-colors">汇总清单</button>
+            <button @click="shoppingMode = 'daily'" :class="shoppingMode === 'daily' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'" class="px-4 py-2 rounded-lg fr-caption transition-colors">按天清单</button>
+          </div>
+        </div>
         <div class="flex-1 overflow-y-auto p-5">
           <div x-show="shoppingLoading" class="py-12 text-center">
             <div class="w-10 h-10 rounded-full bg-primary/10 mx-auto mb-3 flex items-center justify-center">
@@ -232,17 +258,37 @@
             </div>
             <p class="fr-caption text-muted-foreground">生成中…</p>
           </div>
-          <div x-show="!shoppingLoading && shoppingItems.length === 0" class="py-12 text-center">
+          <div x-show="!shoppingLoading && shoppingMode === 'merged' && shoppingItems.length === 0 && shoppingByDay.length === 0" class="py-12 text-center">
             <p class="fr-caption text-muted-foreground">本周还没有预定，先去安排食谱吧～</p>
           </div>
-          <ul x-show="!shoppingLoading && shoppingItems.length > 0" class="space-y-2">
+          <div x-show="!shoppingLoading && shoppingMode === 'daily'" class="space-y-4">
+            <template x-for="(day, di) in shoppingByDay" :key="'bd-' + di">
+              <div class="rounded-xl border border-border p-3">
+                <p class="fr-label mb-2" x-text="day.weekday + ' · ' + day.date"></p>
+                <div x-for="meal in day.meals" :key="day.date + '-' + meal.meal_type" class="mb-2">
+                    <p class="fr-caption font-medium text-primary" x-text="meal.label + '：' + (meal.recipes || []).join('、')"></p>
+                    <ul class="space-y-1 mt-1">
+                      <template x-for="(item, idx) in meal.items" :key="'i-' + idx">
+                        <li class="flex items-center justify-between fr-caption text-muted-foreground px-2">
+                          <span x-text="item.name"></span>
+                          <span x-text="item.total ? (item.total + (item.unit ? ' ' + item.unit : '')) : ((item.amounts || []).join(' / ') + (item.unit ? ' ' + item.unit : ''))"></span>
+                        </li>
+                      </template>
+                    </ul>
+                  </div>
+              </div>
+            </template>
+            <p x-show="shoppingByDay.length === 0" class="py-8 text-center fr-caption text-muted-foreground">本周还没有安排，先去计划吧～</p>
+          </div>
+          <ul x-show="!shoppingLoading && shoppingMode === 'merged' && shoppingItems.length > 0" class="space-y-2">
             <template x-for="(item, idx) in shoppingItems" :key="idx">
               <li class="flex items-center gap-3 p-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors cursor-pointer" x-data="{ checked: false }" @click="checked = !checked">
                 <input type="checkbox" x-model="checked" class="w-5 h-5 accent-[var(--fr-primary)] rounded border-border" @click.stop>
                 <div class="flex-1">
                   <p class="fr-body" :class="checked ? 'line-through text-muted-foreground' : ''" x-text="item.name"></p>
                 </div>
-                <p class="fr-caption text-muted-foreground" x-text="(item.amount || '') + (item.unit ? ' ' + item.unit : '')"></p>
+                <p class="fr-caption text-muted-foreground"
+                   x-text="item.total ? (item.total + (item.unit ? ' ' + item.unit : '')) : ((item.amounts || []).join(' / ') + (item.unit ? ' ' + item.unit : ''))"></p>
               </li>
             </template>
           </ul>

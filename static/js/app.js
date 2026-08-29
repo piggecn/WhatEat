@@ -117,6 +117,11 @@ function loginPage() {
   };
 }
 
+/* 图标刷新：预编译 CSS 后无需防抖，立即转换（图标数量少，开销可忽略） */
+window.__refreshIcons = function () {
+  if (window.lucide && window.lucide.createIcons) { window.lucide.createIcons(); }
+};
+
 /* 首页：搜索 + 分类筛选 + 卡片收藏切换 + 随机推荐（初始数据服务端 Jinja 渲染） */
 function indexPage(currentCategory, currentSort) {
   return {
@@ -174,7 +179,7 @@ function indexPage(currentCategory, currentSort) {
       this.rand.error = '';
       this.rand.recipe = {};
       this.fetchRandom();
-      this.$nextTick(() => { if (window.lucide) window.lucide.createIcons(); });
+      this.$nextTick(() => { if (window.lucide) window.__refreshIcons(); });
     },
     closeRandom() {
       this.rand.open = false;
@@ -201,7 +206,7 @@ function indexPage(currentCategory, currentSort) {
         this.rand.error = '网络异常，请稍后再试';
       } finally {
         this.rand.loading = false;
-        this.$nextTick(() => { if (window.lucide) window.lucide.createIcons(); });
+        this.$nextTick(() => { if (window.lucide) window.__refreshIcons(); });
       }
     },
     async confirmRandom() {
@@ -369,7 +374,7 @@ function detailPage(recipeId, initialFav) {
     /* ===== 今天做这个 ===== */
     openMealPicker() {
       this.mealPickerOpen = true;
-      this.$nextTick(() => { if (window.lucide) window.lucide.createIcons(); });
+      this.$nextTick(() => { if (window.lucide) window.__refreshIcons(); });
     },
     closeMealPicker() {
       this.mealPickerOpen = false;
@@ -430,11 +435,13 @@ function editPage(isEdit, recipeId, initialProvider) {
     },
   };
   const PROVIDER_ORDER = ['pixabay', 'pixabay_zh', 'wikimedia'];
+  const DIET_TAGS = ['辣', '海鲜', '坚果', '鸡蛋', '牛奶', '麸质', '花生', '素食', '高糖'];
   const pickMeta = (p) => PROVIDER_META[p] || PROVIDER_META.pixabay;
 
   return {
     isEdit: !!isEdit,
     recipeId: recipeId || null,
+    DIET_TAGS,
     saving: false,
     error: '',
     dragOver: false,
@@ -443,6 +450,7 @@ function editPage(isEdit, recipeId, initialProvider) {
       title: '', description: '', category: '', servings: 2,
       prep_time: null, cook_time: null, image_path: '',
       meal_tags: ['lunch', 'dinner'],
+      diet_tags: [],
     },
     ingredients: [{ name: '', amount: '', unit: '' }],
     steps: [{ description: '' }],
@@ -495,6 +503,7 @@ function editPage(isEdit, recipeId, initialProvider) {
           this.form.prep_time = r.prep_time;
           this.form.cook_time = r.cook_time;
           this.form.image_path = r.image_path || '';
+          this.form.diet_tags = r.diet_tags || [];
           if (r.meal_tags && r.meal_tags.length) {
             this.form.meal_tags = r.meal_tags;
           } else {
@@ -520,6 +529,26 @@ function editPage(isEdit, recipeId, initialProvider) {
       if (idx >= 0) this.form.meal_tags.splice(idx, 1);
       else this.form.meal_tags.push(tag);
     },
+    /* 忌口标签切换 */
+    toggleDietTag(tag) {
+      const idx = this.form.diet_tags.indexOf(tag);
+      if (idx >= 0) this.form.diet_tags.splice(idx, 1);
+      else this.form.diet_tags.push(tag);
+    },
+    /* 自定义忌口标签 */
+    dietCustom: '',
+    addDietTag() {
+      const t = (this.dietCustom || '').trim();
+      this.dietCustom = '';
+      if (!t) return;
+      if (t.length > 12) { this.error = '忌口标签最多 12 个字'; return; }
+      if (this.form.diet_tags.length >= 20) { this.error = '忌口标签最多 20 个'; return; }
+      if (!this.form.diet_tags.includes(t)) this.form.diet_tags.push(t);
+    },
+    removeDietTag(tag) {
+      const idx = this.form.diet_tags.indexOf(tag);
+      if (idx >= 0) this.form.diet_tags.splice(idx, 1);
+    },
     /* 食材行 */
     addIngredient() { this.ingredients.push({ name: '', amount: '', unit: '' }); this.refreshIcons(); },
     removeIngredient(i) { if (this.ingredients.length > 1) this.ingredients.splice(i, 1); this.refreshIcons(); },
@@ -528,7 +557,7 @@ function editPage(isEdit, recipeId, initialProvider) {
     removeStep(i) { if (this.steps.length > 1) this.steps.splice(i, 1); this.refreshIcons(); },
     /* Alpine x-for 动态新增的 <i data-lucide> 需要重新调用 lucide.createIcons() 才会渲染成 SVG */
     refreshIcons() {
-      this.$nextTick(() => { if (window.lucide) window.lucide.createIcons(); });
+      this.$nextTick(() => { if (window.lucide) window.__refreshIcons(); });
     },
 
     /* 图片上传：拖拽 + 点击 */
@@ -566,7 +595,7 @@ function editPage(isEdit, recipeId, initialProvider) {
       this.recipeImport.enQueries = [];
       this.recipeImport.zhKeyword = '';
       this.recipeImport.enMode = false;
-      this.$nextTick(() => { if (window.lucide) window.lucide.createIcons(); });
+      this.$nextTick(() => { if (window.lucide) window.__refreshIcons(); });
     },
     closeRecipeImport() {
       this.recipeImport.open = false;
@@ -598,7 +627,7 @@ function editPage(isEdit, recipeId, initialProvider) {
         this.recipeImport.results = [];
       } finally {
         this.recipeImport.loading = false;
-        this.$nextTick(() => { if (window.lucide) window.lucide.createIcons(); });
+        this.$nextTick(() => { if (window.lucide) window.__refreshIcons(); });
       }
     },
     /** 中英转换：中文↔英文搜索词切换（TheMealDB 按英文搜索最准） */
@@ -636,7 +665,7 @@ function editPage(isEdit, recipeId, initialProvider) {
         });
         if (res.ok) this.recipeImport.selected = await res.json();
       } catch (e) { /* 忽略 */ }
-      this.$nextTick(() => { if (window.lucide) window.lucide.createIcons(); });
+      this.$nextTick(() => { if (window.lucide) window.__refreshIcons(); });
     },
     importSelected() {
       if (!this.recipeImport.selected) return;
@@ -718,7 +747,7 @@ function editPage(isEdit, recipeId, initialProvider) {
       if (this.imgSearch.hasSearched && (this.imgSearch.keyword || this.form.title)) {
         this.doImageSearch(1);
       } else {
-        this.$nextTick(() => { if (window.lucide) window.lucide.createIcons(); });
+        this.$nextTick(() => { if (window.lucide) window.__refreshIcons(); });
       }
     },
     /**
@@ -744,7 +773,7 @@ function editPage(isEdit, recipeId, initialProvider) {
         this.imgSearch.loading = false;
       }
       this._applyProviderMeta();
-      this.$nextTick(() => { if (window.lucide) window.lucide.createIcons(); });
+      this.$nextTick(() => { if (window.lucide) window.__refreshIcons(); });
     },
     /** 用户在弹窗搜索框里回车 / 点「搜索」按钮时触发 —— 永远从第 1 页开始 */
     submitKeywordSearch() {
@@ -797,7 +826,7 @@ function editPage(isEdit, recipeId, initialProvider) {
         this.imgSearch.results = [];
       } finally {
         this.imgSearch.loading = false;
-        this.$nextTick(() => { if (window.lucide) window.lucide.createIcons(); });
+        this.$nextTick(() => { if (window.lucide) window.__refreshIcons(); });
         // 无结果（未配置 Key、网络失败、没搜到）→ 自动展开手动输入
         if (!this.imgSearch.results || this.imgSearch.results.length === 0) {
           this.imgSearch.manualMode = true;
@@ -829,6 +858,7 @@ function editPage(isEdit, recipeId, initialProvider) {
           cook_time: this.form.cook_time === null ? null : Number(this.form.cook_time),
           image_path: this.form.image_path || null,
           meal_tags: this.form.meal_tags,
+          diet_tags: this.form.diet_tags || [],
           ingredients: this.ingredients
             .filter(i => i.name.trim())
             .map(i => ({ name: i.name.trim(), amount: i.amount.trim() || null, unit: i.unit.trim() || null })),
@@ -896,6 +926,25 @@ function adminPage() {
       this.newUser = { username: '', password: '', is_admin: false, display_name: '', avatar: '' };
       this.showAdd = true;
     },
+    toggleAvoidTag(tag) {
+      const idx = this.form.avoid_tags.indexOf(tag);
+      if (idx >= 0) this.form.avoid_tags.splice(idx, 1);
+      else this.form.avoid_tags.push(tag);
+    },
+    avoidCustom: '',
+    addAvoidTag() {
+      const t = (this.avoidCustom || '').trim();
+      this.avoidCustom = '';
+      if (!t) return;
+      if (t.length > 12) { this.error = '忌口标签最多 12 个字'; return; }
+      if (this.form.avoid_tags.length >= 20) { this.error = '忌口标签最多 20 个'; return; }
+      if (!this.form.avoid_tags.includes(t)) this.form.avoid_tags.push(t);
+    },
+    removeAvoidTag(tag) {
+      const idx = this.form.avoid_tags.indexOf(tag);
+      if (idx >= 0) this.form.avoid_tags.splice(idx, 1);
+    },
+
     selectPreset(p) {
       this.newUser.display_name = p.name;
       this.newUser.avatar = p.key;
@@ -1053,7 +1102,7 @@ function adminPage() {
         this.loginBg.results = [];
       } finally {
         this.loginBg.loading = false;
-        this.$nextTick(() => { if (window.lucide) window.lucide.createIcons(); });
+        this.$nextTick(() => { if (window.lucide) window.__refreshIcons(); });
       }
     },
 
@@ -1114,7 +1163,7 @@ function aboutPage() {
         if (res.ok) this.release = await res.json();
       } catch (e) { this.release = null; }
       finally { this.releaseLoading = false; }
-      this.$nextTick(() => { if (window.lucide) window.lucide.createIcons(); });
+      this.$nextTick(() => { if (window.lucide) window.__refreshIcons(); });
     },
     /* 点击「服务器版本」按钮：强制刷新 GitHub 最新版本并比对本地版本 */
     async checkUpdate() {
@@ -1148,7 +1197,7 @@ function aboutPage() {
         this.updateState = 'unconfigured';
       } finally {
         this.releaseLoading = false;
-        this.$nextTick(() => { if (window.lucide) window.lucide.createIcons(); });
+        this.$nextTick(() => { if (window.lucide) window.__refreshIcons(); });
       }
     },
     /* 在线更新：拉取最新镜像并重启服务 */
@@ -1221,7 +1270,8 @@ function aboutPage() {
 /* 个人资料页：上传头像 + 修改昵称 + 修改密码 */
 function profilePage() {
   return {
-    form: { display_name: '', avatar: '', carousel_type: 'most_cooked', carousel_limit: 10, username: '', avatar_path: '' },
+    form: { display_name: '', avatar: '', carousel_type: 'most_cooked', carousel_limit: 10, username: '', avatar_path: '', avoid_tags: [] },
+    AVOID_TAGS: ['辣', '海鲜', '坚果', '鸡蛋', '牛奶', '麸质', '花生', '素食', '高糖'],
     FAMILY_PRESETS: [
       { key: 'dad', name: '爸爸', emoji: '👨' },
       { key: 'mom', name: '妈妈', emoji: '👩' },
@@ -1254,6 +1304,7 @@ function profilePage() {
         this.form.avatar_path = u.avatar_path || '';
         this.form.carousel_type = u.carousel_type || 'most_cooked';
         this.form.carousel_limit = u.carousel_limit || 10;
+        this.form.avoid_tags = u.avoid_tags || [];
       } catch (e) { this.error = e.message; }
     },
 
@@ -1293,6 +1344,7 @@ function profilePage() {
             avatar: this.form.avatar || null,
             carousel_type: this.form.carousel_type,
             carousel_limit: Number(this.form.carousel_limit) || 10,
+            avoid_tags: this.form.avoid_tags || [],
           }),
         });
         const data = await res.json();
@@ -1369,7 +1421,7 @@ function carouselComponent() {
         this.loading = false;
       }
       this.startAutoPlay();
-      this.$nextTick(() => { if (window.lucide) window.lucide.createIcons(); });
+      this.$nextTick(() => { if (window.lucide) window.__refreshIcons(); });
     },
 
     next() {
@@ -1424,6 +1476,22 @@ function calendarPage() {
     weekDays: [],
     monthYear: '',
     monthDays: [],
+    mealRows: [
+      { key: 'breakfast', label: '早餐', icon: 'sunrise' },
+      { key: 'lunch', label: '午餐', icon: 'sun' },
+      { key: 'dinner', label: '晚餐', icon: 'moon' },
+    ],
+    weekGrid: [],
+    rebuildWeekGrid() {
+      const rows = [];
+      for (const row of this.mealRows) {
+        rows.push({ type: 'label', label: row.label, icon: row.icon });
+        for (let i = 0; i < 7; i++) {
+          rows.push({ type: 'day', idx: i, rowKey: row.key, rowLabel: row.label });
+        }
+      }
+      this.weekGrid = rows;
+    },
 
     pickerOpen: false,
     pickerDate: '',
@@ -1434,6 +1502,8 @@ function calendarPage() {
 
     shoppingOpen: false,
     shoppingItems: [],
+    shoppingByDay: [],
+    shoppingMode: 'merged',
     shoppingLoading: false,
 
     init() {
@@ -1445,7 +1515,7 @@ function calendarPage() {
       this.monthYear = `${yyyy}-${mm}`;
       this.fetchWeek();
       this.fetchMonth();
-      this.$nextTick(() => { if (window.lucide) window.lucide.createIcons(); });
+      this.$nextTick(() => { if (window.lucide) window.__refreshIcons(); });
     },
 
     get weekRangeText() {
@@ -1513,6 +1583,11 @@ function calendarPage() {
         if (res.ok) {
           const data = await res.json();
           const apiDays = data.days || [];
+          const toSlots = (arr) => (arr || []).map((x) => (x && x.recipe_id ? {
+            recipe_id: x.recipe_id,
+            title: x.title,
+            image_path: x.image_url || x.image_path || '',
+          } : null)).filter(Boolean);
           this.weekDays = apiDays.map((d, i) => {
             const dateObj = new Date(d.date);
             return {
@@ -1520,21 +1595,9 @@ function calendarPage() {
               weekdayName: d.weekday || ('周' + names[i]),
               dayNum: dateObj.getDate(),
               isToday: d.date === today,
-              breakfast: d.breakfast && d.breakfast.recipe_id ? {
-                recipe_id: d.breakfast.recipe_id,
-                title: d.breakfast.title,
-                image_path: d.breakfast.image_url || d.breakfast.image_path || '',
-              } : null,
-              lunch: d.lunch && d.lunch.recipe_id ? {
-                recipe_id: d.lunch.recipe_id,
-                title: d.lunch.title,
-                image_path: d.lunch.image_url || d.lunch.image_path || '',
-              } : null,
-              dinner: d.dinner && d.dinner.recipe_id ? {
-                recipe_id: d.dinner.recipe_id,
-                title: d.dinner.title,
-                image_path: d.dinner.image_url || d.dinner.image_path || '',
-              } : null,
+              breakfast: toSlots(d.breakfast),
+              lunch: toSlots(d.lunch),
+              dinner: toSlots(d.dinner),
             };
           });
         } else {
@@ -1543,7 +1606,8 @@ function calendarPage() {
       } catch (e) {
         this.weekDays = buildDefault();
       }
-      this.$nextTick(() => { if (window.lucide) window.lucide.createIcons(); });
+      this.rebuildWeekGrid();
+      this.$nextTick(() => { window.__refreshIcons(); });
     },
 
     prevMonth() {
@@ -1567,23 +1631,16 @@ function calendarPage() {
           const data = await res.json();
           const apiDays = data.days || [];
           const mealsByDate = {};
+          const toSlots = (arr) => (arr || []).map((x) => (x && x.recipe_id ? {
+            recipe_id: x.recipe_id,
+            title: x.title,
+            image_path: x.image_url || '',
+          } : null)).filter(Boolean);
           for (const d of apiDays) {
             mealsByDate[d.date] = {
-              breakfast: d.breakfast ? {
-                recipe_id: d.breakfast.recipe_id,
-                title: d.breakfast.title,
-                image_path: d.breakfast.image_url || '',
-              } : null,
-              lunch: d.lunch ? {
-                recipe_id: d.lunch.recipe_id,
-                title: d.lunch.title,
-                image_path: d.lunch.image_url || '',
-              } : null,
-              dinner: d.dinner ? {
-                recipe_id: d.dinner.recipe_id,
-                title: d.dinner.title,
-                image_path: d.dinner.image_url || '',
-              } : null,
+              breakfast: toSlots(d.breakfast),
+              lunch: toSlots(d.lunch),
+              dinner: toSlots(d.dinner),
             };
           }
           this.buildMonthDays(mealsByDate);
@@ -1593,7 +1650,7 @@ function calendarPage() {
       } catch (e) {
         this.buildMonthDays({});
       }
-      this.$nextTick(() => { if (window.lucide) window.lucide.createIcons(); });
+      this.$nextTick(() => { if (window.lucide) window.__refreshIcons(); });
     },
 
     buildMonthDays(mealsByDate) {
@@ -1611,9 +1668,9 @@ function calendarPage() {
       for (let i = 1; i <= lastDay.getDate(); i++) {
         const dStr = `${y}-${String(m).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
         const meals = mealsByDate[dStr] || {};
-        const hasBreakfast = !!meals.breakfast;
-        const hasLunch = !!meals.lunch;
-        const hasDinner = !!meals.dinner;
+        const hasBreakfast = !!(meals.breakfast && meals.breakfast.length);
+        const hasLunch = !!(meals.lunch && meals.lunch.length);
+        const hasDinner = !!(meals.dinner && meals.dinner.length);
         days.push({
           date: dStr,
           day: i,
@@ -1647,7 +1704,7 @@ function calendarPage() {
       this.pickerOpen = true;
       this.pickerResults = [];
       this.searchPickerRecipes();
-      this.$nextTick(() => { if (window.lucide) window.lucide.createIcons(); });
+      this.$nextTick(() => { if (window.lucide) window.__refreshIcons(); });
     },
 
     async searchPickerRecipes() {
@@ -1689,12 +1746,13 @@ function calendarPage() {
       } catch (e) { /* 忽略 */ }
     },
 
-    async cancelPlan(date, mealType) {
+    async cancelPlan(date, mealType, recipeId) {
       if (!window.confirm('确定取消这个预定吗？')) return;
       try {
         const params = new URLSearchParams();
         params.set('date', date);
         params.set('meal_type', mealType);
+        if (recipeId) params.set('recipe_id', recipeId);
         const res = await RecipeApp.api('/api/calendar/plan?' + params.toString(), { method: 'DELETE' });
         if (res.ok || res.status === 204) {
           this.fetchWeek();
@@ -1744,9 +1802,11 @@ function calendarPage() {
         const res = await RecipeApp.api('/api/calendar/shopping-list?week_start=' + monday);
         if (res.ok) {
           const data = await res.json();
-          this.shoppingItems = data.items || data || [];
+          this.shoppingItems = data.items || [];
+          this.shoppingByDay = data.by_day || [];
         } else {
           this.shoppingItems = [];
+          this.shoppingByDay = [];
         }
       } catch (e) {
         this.shoppingItems = [];

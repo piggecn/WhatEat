@@ -15,8 +15,11 @@
     <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
     <div class="absolute bottom-0 left-0 right-0 p-4 sm:p-6 lg:p-8">
       <div class="max-w-7xl mx-auto">
-        <div class="flex items-center gap-2 mb-3">
+        <div class="flex items-center gap-2 mb-3 flex-wrap">
           <span class="fr-tag bg-white/20 text-white border border-white/30">{{ recipe.category or '其他' }}</span>
+          {% for t in recipe.diet_tags %}
+          <span class="fr-tag bg-white/20 text-white border border-white/30">🚫 {{ t }}</span>
+          {% endfor %}
         </div>
         <h1 class="text-white text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight">{{ recipe.title }}</h1>
         {% if recipe.description %}

@@ -1,0 +1,40 @@
+/* Tailwind v4 预编译入口：取代浏览器运行时（@tailwindcss/browser CDN）。
+   运行 npm 包 @tailwindcss/cli 编译本文件生成 tailwind.css：
+   docker run --rm -v "%CD%":/src -w /src/static/css node:22-alpine npx --yes @tailwindcss/cli@4 -i ./input.css -o ./tailwind.css
+*/
+@import "tailwindcss";
+
+@source "../../app/templates";
+@source "../js";
+
+@theme inline {
+  --color-background: var(--fr-background);
+  --color-foreground: var(--fr-foreground);
+  --color-card: var(--fr-card);
+  --color-card-foreground: var(--fr-card-foreground);
+  --color-popover: var(--fr-popover);
+  --color-popover-foreground: var(--fr-popover-foreground);
+  --color-primary: var(--fr-primary);
+  --color-primary-foreground: var(--fr-primary-foreground);
+  --color-muted: var(--fr-muted);
+  --color-muted-foreground: var(--fr-muted-foreground);
+  --color-border: var(--fr-border);
+  --color-input: var(--fr-input);
+  --color-ring: var(--fr-ring);
+  --radius-sm: var(--fr-radius-small);
+  --radius-md: var(--fr-radius-medium);
+  --radius-lg: var(--fr-radius-large);
+}
+
+@layer base {
+  body { background: var(--fr-background); color: var(--fr-foreground); }
+}
+
+/* Alpine x-cloak：初始化前隐藏模板内容 */
+[x-cloak] { display: none !important; }
+
+/* 原有补充样式（从 base.html 迁入） */
+.text-success { color: var(--fr-state-success); }
+.bg-success-soft { background-color: var(--fr-state-success-soft); }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }

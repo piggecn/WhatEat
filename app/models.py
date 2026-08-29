@@ -54,6 +54,7 @@ class ProfileSettingsOut(BaseModel):
     is_admin: bool
     carousel_type: str
     carousel_limit: int
+    avoid_tags: List[str] = []
 
 
 class ProfileUpdateIn(BaseModel):
@@ -63,6 +64,7 @@ class ProfileUpdateIn(BaseModel):
     avatar: Optional[str] = None
     carousel_type: Optional[str] = Field(None, pattern="^(most_cooked|favorites|recent|random)$")
     carousel_limit: Optional[int] = Field(None, ge=5, le=20)
+    avoid_tags: Optional[List[str]] = None
 
 
 class PasswordChange(BaseModel):
@@ -88,6 +90,7 @@ class RecipeCreate(BaseModel):
     description: Optional[str] = None
     category: Optional[str] = None  # 早餐/午餐/晚餐/甜点/小吃/饮品（单分类）
     meal_tags: List[str] = Field(default_factory=list)  # ["breakfast","lunch","dinner"]
+    diet_tags: Optional[List[str]] = None  # 忌口标签 ["辣","海鲜","坚果",...]
     servings: int = 2
     prep_time: Optional[int] = None
     cook_time: Optional[int] = None
@@ -114,6 +117,7 @@ class RecipeDetail(BaseModel):
     description: Optional[str] = None
     category: Optional[str] = None
     meal_tags: List[str] = Field(default_factory=list)
+    diet_tags: List[str] = Field(default_factory=list)
     servings: int
     prep_time: Optional[int] = None
     cook_time: Optional[int] = None
@@ -138,6 +142,7 @@ class RecipeListItem(BaseModel):
     description: Optional[str] = None
     category: Optional[str] = None
     meal_tags: List[str] = Field(default_factory=list)
+    diet_tags: List[str] = Field(default_factory=list)
     image_path: Optional[str] = None
     prep_time: Optional[int] = None
     cook_time: Optional[int] = None
@@ -222,9 +227,9 @@ class DayMealSlot(BaseModel):
 class DayPlan(BaseModel):
     date: str
     weekday: str  # 周一~周日
-    breakfast: DayMealSlot = DayMealSlot()
-    lunch: DayMealSlot = DayMealSlot()
-    dinner: DayMealSlot = DayMealSlot()
+    breakfast: List[DayMealSlot] = []   # 每餐支持多道菜
+    lunch: List[DayMealSlot] = []
+    dinner: List[DayMealSlot] = []
 
 
 class WeekPlanResponse(BaseModel):
@@ -247,6 +252,9 @@ class MonthDayInfo(BaseModel):
     breakfast_ate: bool
     lunch_ate: bool
     dinner_ate: bool
+    breakfast: List[DayMealSlot] = []   # 预定详情（多道菜）
+    lunch: List[DayMealSlot] = []
+    dinner: List[DayMealSlot] = []
 
 
 class CalendarPlanCreate(BaseModel):
@@ -265,8 +273,23 @@ class CalendarPlanDelete(BaseModel):
 class ShoppingListItem(BaseModel):
     name: str
     amounts: List[str] = []   # 去重后的用量组合
+    total: Optional[str] = None   # 数字用量求和结果（可解析时）
     unit: Optional[str] = None
+
+
+class ShoppingDayMeal(BaseModel):
+    meal_type: str
+    label: str
+    recipes: List[str] = []
+    items: List[ShoppingListItem] = []
+
+
+class ShoppingDay(BaseModel):
+    date: str
+    weekday: str
+    meals: List[ShoppingDayMeal] = []
 
 
 class ShoppingListResponse(BaseModel):
     items: List[ShoppingListItem] = []
+    by_day: List[ShoppingDay] = []   # 按天分组的日清单

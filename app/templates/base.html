@@ -5,42 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{% block title %}今天吃点啥{% endblock %}</title>
   <link rel="icon" type="image/png" href="/static/logo.png" />
+  <link rel="manifest" href="/static/manifest.json" />
+  <meta name="theme-color" content="#e07a3f" />
   <link rel="apple-touch-icon" type="image/png" href="/static/logo.png" />
   <link rel="shortcut icon" type="image/png" href="/static/logo.png" />
-  <link rel="stylesheet" href="/static/css/style.css" />
-  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.1/dist/index.global.js"></script>
-  <script src="https://unpkg.com/lucide@1.8.0/dist/umd/lucide.min.js"></script>
-  <style type="text/tailwindcss">
-  @theme inline {
-    --color-background: var(--fr-background);
-    --color-foreground: var(--fr-foreground);
-    --color-card: var(--fr-card);
-    --color-card-foreground: var(--fr-card-foreground);
-    --color-popover: var(--fr-popover);
-    --color-popover-foreground: var(--fr-popover-foreground);
-    --color-primary: var(--fr-primary);
-    --color-primary-foreground: var(--fr-primary-foreground);
-    --color-muted: var(--fr-muted);
-    --color-muted-foreground: var(--fr-muted-foreground);
-    --color-border: var(--fr-border);
-    --color-input: var(--fr-input);
-    --color-ring: var(--fr-ring);
-    --radius-sm: var(--fr-radius-small);
-    --radius-md: var(--fr-radius-medium);
-    --radius-lg: var(--fr-radius-large);
-  }
-  @layer base {
-    body { background: var(--fr-background); color: var(--fr-foreground); }
-  }
-  </style>
-  <style>
-    .text-success { color: var(--fr-state-success); }
-    .bg-success-soft { background-color: var(--fr-state-success-soft); }
-    .no-scrollbar::-webkit-scrollbar { display: none; }
-    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-  </style>
-  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-  <script src="/static/js/app.js"></script>
+  <link rel="stylesheet" href="/static/css/tailwind.css?v={{ APP_VERSION }}" />
+  <link rel="stylesheet" href="/static/css/style.css?v={{ APP_VERSION }}" />
+  <script src="/static/js/lucide.min.js?v={{ APP_VERSION }}"></script>
+  <script defer src="/static/js/alpine.min.js?v={{ APP_VERSION }}"></script>
+  <script src="/static/js/app.js?v={{ APP_VERSION }}"></script>
 </head>
 <body class="min-h-screen font-sans antialiased bg-background text-foreground {% block body_class %}{% endblock %}">
   {% if page != 'login' and current_user %}
@@ -189,5 +162,10 @@
   <script>document.addEventListener('alpine:initialized', () => { if (window.lucide) lucide.createIcons(); });</script>
   {% block scripts %}{% endblock %}
   {% block body_extra %}{% endblock %}
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/static/sw.js?v={{ APP_VERSION }}').catch(function () {});
+  }
+</script>
 </body>
 </html>
