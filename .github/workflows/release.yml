@@ -1,37 +1,132 @@
 name: release
 
+# 推送到 main 后自动发布：版本来自 mobile/pubspec.yaml（如 0.1.0）。
+# 同一版本只会发布一次（tag 已存在则跳过）；Docker 镜像 + APK + tag + Release 在同一 job 内完成。
 on:
   push:
-    tags:
-      - 'v*'
+    branches: [main]
+    paths:
+      - 'mobile/**'
+      - 'app/**'
+      - 'Dockerfile'
+      - 'requirements.txt'
+      - 'docker-compose*.yml'
+      - 'static/**'
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  publish:
+  release:
     runs-on: ubuntu-latest
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 读取应用版本
+        id: version
+        run: |
+          VER=$(grep -E '^version:' mobile/pubspec.yaml | awk '{print $2}' | cut -d'+' -f1)
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "读到的版本: $VER"
+
+      - name: 检查该版本是否已发布
+        id: check
+        run: |
+          if git rev-parse "v${{ steps.version.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "v${{ steps.version.outputs.version }} 已存在，跳过（普通代码同步）"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "v${{ steps.version.outputs.version }} 尚未发布，进入发布流程"
+          fi
+
+      - name: 校验版本号递增
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          LATEST=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | sed 's/^v//' | sort -V | tail -1)
+          NEW="${{ steps.version.outputs.version }}"
+          python3 - "$NEW" "${LATEST:-0.0.0}" <<'EOF'
+          import sys
+          def num(s):
+              return [int(x) for x in s.split('.')]
+          new, old = num(sys.argv[1]), num(sys.argv[2])
+          if new <= old:
+              sys.exit(f"版本未递增: {sys.argv[1]} <= {sys.argv[2]}")
+          print(f"版本校验通过: {sys.argv[2]} -> {sys.argv[1]}")
+          EOF
+
+      - name: 安装 JDK 17
+        if: steps.check.outputs.exists == 'false'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: 安装 Flutter
+        if: steps.check.outputs.exists == 'false'
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+
+      - name: 拉取依赖
+        if: steps.check.outputs.exists == 'false'
+        run: cd mobile && flutter pub get
+
+      - name: 解码签名密钥
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > /tmp/whateat-release.jks
+          cat > mobile/android/key.properties <<EOF
+          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
+          keyPassword=${{ secrets.KEY_PASSWORD }}
+          keyAlias=${{ secrets.KEY_ALIAS }}
+          storeFile=/tmp/whateat-release.jks
+          EOF
+
+      - name: 构建 APK（版本号取自 pubspec / tag）
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          cd mobile
+          flutter build apk --release \
+            --build-name=${{ steps.version.outputs.version }} \
+            --build-number=${{ github.run_number }}
+          cp build/app/outputs/flutter-apk/app-release.apk ../whateat-v${{ steps.version.outputs.version }}.apk
 
       - name: 登录 Docker Hub
+        if: steps.check.outputs.exists == 'false'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: 构建并推送 Docker 镜像
+        if: steps.check.outputs.exists == 'false'
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/whateat:${{ github.ref_name }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/whateat:v${{ steps.version.outputs.version }}
             ${{ secrets.DOCKERHUB_USERNAME }}/whateat:latest
 
-      - name: 创建 GitHub Release
+      - name: 自动打 tag
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          git config user.name "piggecn"
+          git config user.email "hu85454@gmail.com"
+          git tag "v${{ steps.version.outputs.version }}"
+          git push origin "v${{ steps.version.outputs.version }}"
+
+      - name: 创建 Release 并上传 APK
+        if: steps.check.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
+          tag_name: v${{ steps.version.outputs.version }}
+          files: whateat-v${{ steps.version.outputs.version }}.apk
           generate_release_notes: true

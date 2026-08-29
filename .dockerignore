@@ -12,3 +12,6 @@ env
 *.egg-info
 .pytest_cache
 .DS_Store
+# Flutter 移动端源码不进后端镜像
+mobile
+tools
