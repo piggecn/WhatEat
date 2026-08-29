@@ -619,6 +619,10 @@ function editPage(isEdit, recipeId, initialProvider) {
       ocrLoading: false,
       ocrMsg: '',
       parsed: null,
+      // 链接导入
+      linkUrl: '',
+      linkLoading: false,
+      linkMsg: '',
       // 中英转换：搜索返回的英文查询词与原始中文
       enQueries: [],
       zhKeyword: '',
@@ -859,6 +863,33 @@ function editPage(isEdit, recipeId, initialProvider) {
         this.recipeImport.parsed = null;
       } finally {
         this.recipeImport.pasteLoading = false;
+      }
+    },
+    async doFetchUrl() {
+      const url = (this.recipeImport.linkUrl || '').trim();
+      if (!url) return;
+      this.recipeImport.linkLoading = true;
+      this.recipeImport.linkMsg = '';
+      this.recipeImport.selected = null;
+      try {
+        const res = await RecipeApp.api('/api/recipe-api/fetch-url', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: url }),
+        });
+        if (res.ok) {
+          const d = await res.json();
+          this.recipeImport.selected = d;
+          this.recipeImport.tab = 'search'; // 复用搜索结果下方的预览+导入按钮
+        } else {
+          const e = await res.json().catch(() => ({}));
+          this.recipeImport.linkMsg = e.detail || '解析失败，请改用粘贴导入。';
+        }
+      } catch (e) {
+        this.recipeImport.linkMsg = '网络错误，解析失败。';
+      } finally {
+        this.recipeImport.linkLoading = false;
+        this.$nextTick(() => { if (window.lucide) window.__refreshIcons(); });
       }
     },
     importParsed() {

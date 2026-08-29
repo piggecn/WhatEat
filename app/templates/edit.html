@@ -120,7 +120,7 @@
             </button>
           </div>
 
-          <!-- Tab：搜索 / 粘贴 -->
+          <!-- Tab：搜索 / 粘贴 / 链接 -->
           <div class="flex items-stretch gap-1 mb-3 border-b border-border">
             <button type="button" @click="recipeImport.tab='search'" :class="recipeImport.tab==='search' ? 'border-[var(--fr-primary)] text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'"
                     class="border-b-2 px-2 sm:px-3 py-1.5 text-sm whitespace-nowrap transition-colors shrink-0 min-w-0">
@@ -128,12 +128,34 @@
               <span class="hidden sm:inline">🔍 搜索导入（TheMealDB）</span>
               <span class="sm:hidden">搜索</span>
             </button>
+            <button type="button" @click="recipeImport.tab='link'" :class="recipeImport.tab==='link' ? 'border-[var(--fr-primary)] text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'"
+                    class="border-b-2 px-2 sm:px-3 py-1.5 text-sm whitespace-nowrap transition-colors shrink-0 min-w-0">
+              <i data-lucide="link" class="w-4 h-4 inline-block sm:hidden"></i>
+              <span class="hidden sm:inline">🔗 链接导入（网页）</span>
+              <span class="sm:hidden">链接</span>
+            </button>
             <button type="button" @click="recipeImport.tab='paste'" :class="recipeImport.tab==='paste' ? 'border-[var(--fr-primary)] text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'"
                     class="border-b-2 px-2 sm:px-3 py-1.5 text-sm whitespace-nowrap transition-colors shrink-0 min-w-0">
               <i data-lucide="clipboard" class="w-4 h-4 inline-block sm:hidden"></i>
               <span class="hidden sm:inline">📋 粘贴导入（小红书等）</span>
               <span class="sm:hidden">粘贴</span>
             </button>
+          </div>
+
+          <!-- 链接 Tab -->
+          <div x-show="recipeImport.tab==='link'">
+            <div class="flex flex-col sm:flex-row items-stretch gap-2 mb-2">
+              <input type="text" x-model="recipeImport.linkUrl" @keydown.enter.prevent="doFetchUrl()"
+                     placeholder="粘贴菜谱网页链接，如 douguo.com/cookbook/..." class="fr-input flex-1 min-w-0 h-10">
+              <button type="button" @click="doFetchUrl()" :disabled="recipeImport.linkLoading || !recipeImport.linkUrl.trim()"
+                      class="fr-btn fr-btn-primary h-10 disabled:opacity-60 shrink-0">
+                <i data-lucide="download" class="w-4 h-4"></i>
+                <span x-show="!recipeImport.linkLoading">解析</span>
+                <span x-show="recipeImport.linkLoading">解析中…</span>
+              </button>
+            </div>
+            <p class="fr-caption text-muted-foreground mb-2">支持豆果美食等公开菜谱页（服务端只抓取你贴的这一页，不做爬虫）。下厨房等需登录的网站请改用「粘贴导入」。</p>
+            <p x-show="recipeImport.linkMsg" class="fr-caption text-[var(--fr-state-error)] mb-2" x-text="recipeImport.linkMsg"></p>
           </div>
 
           <!-- 搜索 Tab -->

@@ -1272,3 +1272,190 @@ def parse_paste(
     """粘贴文本解析：标题 / 食材 / 步骤（中英文均可，尽力而为，前端可预览修改）。"""
     parsed = _parse_paste_text(body.text or "")
     return parsed
+
+
+# ---------- 链接导入（用户提供 URL，服务端抓取单页并解析，不做爬虫） ----------
+
+class FetchUrlBody(BaseModel):
+    url: str = ""
+
+
+_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+_MAX_HTML = 3 * 1024 * 1024
+
+
+def _url_allowed(raw: str) -> bool:
+    """SSRF 防护：仅 http/https，拒绝内网/回环地址。"""
+    import ipaddress
+    import socket as _socket
+    p = urllib.parse.urlparse(raw)
+    if p.scheme not in ("http", "https") or not p.hostname:
+        return False
+    try:
+        infos = _socket.getaddrinfo(p.hostname, p.port or (443 if p.scheme == "https" else 80))
+    except _socket.gaierror:
+        return False
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved:
+            return False
+    return True
+
+
+def _fetch_url_html(url: str, proxy_url: str = "") -> str:
+    if not _url_allowed(url):
+        raise HTTPException(status_code=400, detail="不支持该链接（仅限公开 http/https 网页）")
+    req = urllib.request.Request(url, headers={"User-Agent": _UA, "Accept": "text/html,application/xhtml+xml"})
+    opener = _make_http_opener(proxy_url) or urllib.request.build_opener()
+    resp = None
+    try:
+        resp = opener.open(req, timeout=15)
+        if resp.status and resp.status >= 400:
+            raise HTTPException(status_code=502, detail=f"网页返回 {resp.status}")
+        body = resp.read(_MAX_HTML + 1)
+        if len(body) > _MAX_HTML:
+            raise HTTPException(status_code=502, detail="网页过大，无法解析")
+        charset = (resp.headers.get_content_charset() or "").strip().lower()
+    finally:
+        if resp is not None:
+            resp.close()
+    for enc in (charset, "utf-8", "gb18030"):
+        if not enc:
+            continue
+        try:
+            return body.decode(enc)
+        except (UnicodeDecodeError, LookupError):
+            continue
+    return body.decode("utf-8", errors="replace")
+
+
+def _strip_html(html: str) -> str:
+    html = re.sub(r"(?is)<(script|style|noscript|template)[^>]*>.*?</\1>", " ", html)
+    text = re.sub(r"(?s)<[^>]+>", " ", html)
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
+
+
+def _parse_jsonld_recipe(html: str) -> dict:
+    """schema.org Recipe JSON-LD 解析（多数菜谱站内嵌）。"""
+    out = {"title": "", "ingredients": [], "steps": []}
+    for m in re.finditer(r"(?is)<script[^>]+application/ld\+json[^>]*>(.*?)</script>", html):
+        try:
+            data = json.loads(m.group(1).strip())
+        except Exception:
+            continue
+        cands = data if isinstance(data, list) else [data]
+        for node in cands:
+            if not isinstance(node, dict):
+                continue
+            t = node.get("@type") or []
+            types = t if isinstance(t, list) else [t]
+            if "Recipe" not in types:
+                continue
+            ings = [{"name": str(i).strip(), "amount": "", "unit": ""}
+                    for i in (node.get("recipeIngredient") or []) if str(i).strip()]
+            steps = []
+            for s in (node.get("recipeInstructions") or []):
+                if isinstance(s, dict):
+                    st = (s.get("text") or "").strip()
+                    if not st:
+                        for step in s.get("itemListElement") or []:
+                            if isinstance(step, dict) and (step.get("text") or "").strip():
+                                steps.append(step["text"].strip())
+                        continue
+                    steps.append(st)
+                elif isinstance(s, str) and s.strip():
+                    steps.append(s.strip())
+            if ings or steps:
+                out = {"title": str(node.get("name") or "").strip(), "ingredients": ings, "steps": steps}
+                if ings and steps:
+                    return out
+    return out
+
+
+def _parse_douguo(html: str) -> dict:
+    """豆果美食：title 取 <title> 前缀；食材在 class=scname；步骤在 class=stepcont。"""
+    title = ""
+    m = re.search(r"<title>([^<]+)</title>", html)
+    if m:
+        title = re.split(r"[的_\-—]做法", m.group(1))[0].strip()
+    ings = []
+    i = html.find("的用料")
+    seg = html[i:i + 40000] if i > 0 else html
+    for m in re.finditer(r'scname">\s*(?:<a[^>]*>([^<]+)</a>|([^<]+?)\s*<)', seg):
+        name = (m.group(1) or m.group(2) or "").strip()
+        if name and name not in {x["name"] for x in ings}:
+            ings.append({"name": name, "amount": "", "unit": ""})
+    steps = []
+    for block in re.finditer(r'(?is)class="stepcont[^"]*">(.*?)(?=<div class="stepcont|$)', html):
+        txt = _strip_html(block.group(1))
+        txt = re.sub(r"^步骤\s*\d+\s*", "", txt).strip()
+        if txt and len(txt) > 2:
+            steps.append(txt)
+    return {"title": title, "ingredients": ings, "steps": steps}
+
+
+def _parse_xiachufang(html: str) -> dict:
+    """下厨房：新页面需要 JS 渲染/登录，服务端通常只能拿到壳。返回空结构由调用方提示。"""
+    m = re.search(r"<title>([^<]+)</title>", html)
+    title = (m.group(1).strip() if m else "").replace("的做法", "").split("_")[0].strip()
+    return {"title": title, "ingredients": [], "steps": []}
+
+
+@router.post("/fetch-url")
+def fetch_url(
+    body: FetchUrlBody,
+    conn: sqlite3.Connection = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """用户粘贴菜谱网页链接 → 服务端抓取单页并解析为可导入结构。
+    个人低频使用（相当于替用户打开一次网页），非爬虫；下厨房等反爬站点会提示改用粘贴导入。"""
+    url = (body.url or "").strip()
+    if not url.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="请输入完整网址（http/https）")
+    proxy_url = (get_setting("proxy_url", "", conn=conn) or "").strip()
+    try:
+        html = _fetch_url_html(url, proxy_url)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"网页抓取失败: {type(e).__name__}")
+    host = urllib.parse.urlparse(url).hostname or ""
+    if "douguo.com" in host:
+        parsed = _parse_douguo(html)
+    elif "xiachufang.com" in host:
+        parsed = _parse_xiachufang(html)
+        if not parsed["ingredients"] and not parsed["steps"]:
+            raise HTTPException(
+                status_code=502,
+                detail="下厨房已限制自动读取菜谱内容，请在该页复制文字后使用「粘贴导入」。",
+            )
+    else:
+        parsed = _parse_jsonld_recipe(html)
+        if not parsed["ingredients"] and not parsed["steps"]:
+            text = _strip_html(html)
+            m = re.search(r"<title>([^<]+)</title>", html)
+            if m:
+                text = m.group(1) + "\n" + text
+            p = _parse_paste_text(text[:20000])
+            parsed = {"title": p.get("title") or parsed.get("title") or "",
+                      "ingredients": p.get("ingredients") or [],
+                      "steps": p.get("steps") or []}
+    if not parsed["ingredients"] and not parsed["steps"]:
+        raise HTTPException(status_code=502, detail="未能在该网页识别出食材和步骤，请尝试粘贴导入。")
+    return {
+        "title": parsed.get("title") or "",
+        "category": "",
+        "image_path": "",
+        "servings": 2,
+        "meal_tags": ["lunch", "dinner"],
+        "ingredients": [{"name": i.get("name") or "", "amount": i.get("amount") or "", "unit": i.get("unit") or ""}
+                        for i in parsed.get("ingredients") or []],
+        "steps": [{"description": s} for s in parsed.get("steps") or [] if s.strip()],
+        "prep_time": None,
+        "cook_time": None,
+        "source": "web",
+        "source_id": url,
+        "source_url": url,
+        "original_title": "",
+    }
