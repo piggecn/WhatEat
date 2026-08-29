@@ -20,6 +20,7 @@
 对 Wikimedia 返回的结果，把 title / extmetadata.description 转成 tag 字符串后复用同一套打分。
 """
 import json
+import os
 import urllib.parse
 import urllib.request
 from typing import Dict, List, Optional
@@ -232,6 +233,9 @@ def _make_http_opener(proxy_url: str):
     host = parsed.hostname
     if not host:
         return None
+    # 容器内 127.0.0.1/localhost 指向容器自身，宿主机代理需改用 host.docker.internal
+    if host in ("127.0.0.1", "localhost") and os.path.exists("/.dockerenv"):
+        host = "host.docker.internal"
     proxy_host = host + (f":{parsed.port}" if parsed.port else "")
     userinfo = _proxy_userinfo(parsed)
     full = f"{scheme}://{userinfo}{proxy_host}"
