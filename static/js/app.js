@@ -608,6 +608,7 @@ function editPage(isEdit, recipeId, initialProvider) {
     recipeImport: {
       open: false,
       tab: 'search',
+      source: 'themealdb',   // themealdb | howtocook
       keyword: '',
       searched: false,
       loading: false,
@@ -737,6 +738,16 @@ function editPage(isEdit, recipeId, initialProvider) {
       this.recipeImport.selected = null;
       this.recipeImport.parsed = null;
     },
+    setRecipeSource(src) {
+      if (this.recipeImport.source === src) return;
+      this.recipeImport.source = src;
+      this.recipeImport.searched = false;
+      this.recipeImport.results = [];
+      this.recipeImport.selected = null;
+      this.recipeImport.enQueries = [];
+      this.recipeImport.zhKeyword = '';
+      this.recipeImport.enMode = false;
+    },
     async doRecipeSearch() {
       const kw = (this.recipeImport.keyword || '').trim();
       if (!kw) return;
@@ -745,7 +756,7 @@ function editPage(isEdit, recipeId, initialProvider) {
       this.recipeImport.results = [];
       this.recipeImport.selected = null;
       try {
-        const res = await RecipeApp.api('/api/recipe-api/search?keyword=' + encodeURIComponent(kw));
+        const res = await RecipeApp.api('/api/recipe-api/search?keyword=' + encodeURIComponent(kw) + '&source=' + this.recipeImport.source);
         const d = res.ok ? await res.json() : null;
         if (Array.isArray(d)) {
           this.recipeImport.results = d;
@@ -795,7 +806,8 @@ function editPage(isEdit, recipeId, initialProvider) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             id: r.id, title: r.title, category: r.category, area: r.area,
-            thumb: r.thumb, ingredients: r.ingredients, steps: r.steps,
+            thumb: r.thumb, ingredients: r.ingredients || [], steps: r.steps || [],
+            source: r.source || this.recipeImport.source,
           }),
         });
         if (res.ok) this.recipeImport.selected = await res.json();

@@ -170,8 +170,8 @@ def update_admin_settings(
 
     if "recipe_source" in data and data["recipe_source"] is not None:
         src = (data["recipe_source"] or "").strip().lower()
-        if src and src != "themealdb":
-            raise HTTPException(status_code=400, detail="recipe_source 目前仅支持 themealdb")
+        if src and src not in ("themealdb", "howtocook"):
+            raise HTTPException(status_code=400, detail="recipe_source 仅支持 themealdb / howtocook")
         set_setting("recipe_source", src or "themealdb", conn=conn)
 
     if "recipe_translate" in data and data["recipe_translate"] is not None:

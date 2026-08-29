@@ -2,7 +2,9 @@
 
 无 Key 方案（设计稿定稿）：
 1. /search      —— TheMealDB 搜索（中文关键词先用现有词典转英文召回）
-2. /prepare     —— 把选中菜谱做「英转中」处理，返回可直接填充表单的结构
+                   + HowToCook 中文开源菜谱库搜索（source=howtocook）
+2. /prepare     —— 把选中菜谱做「英转中」处理，返回可直接填充表单的结构；
+                   howtocook 来源直接解析中文 Markdown，无需翻译
 3. /parse-paste —— 粘贴文本解析（标题/食材/步骤），支持中文笔记（如小红书）
 """
 import concurrent.futures as cf
@@ -10,11 +12,12 @@ import hashlib
 import json
 import re
 import sqlite3
+import time
 import urllib.parse
 import urllib.request
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from app.auth import get_current_user
@@ -30,6 +33,155 @@ router = APIRouter(prefix="/api/recipe-api", tags=["recipe-api"])
 THEMEALDB_ENDPOINT = "https://www.themealdb.com/api/json/v1/1"
 MYMEMORY_URL = "https://api.mymemory.translated.net/get"
 _LANGPAIR = "en|zh-CN"
+
+# HowToCook（程序员做饭指南）：MIT 协议中文开源菜谱库，免 Key。
+# raw 被墙时退回 jsDelivr CDN 镜像。
+HOWTOCOOK_BASES = [
+    "https://raw.githubusercontent.com/Anduin2017/HowToCook/master",
+    "https://cdn.jsdelivr.net/gh/Anduin2017/HowToCook@master",
+]
+_HTC_CATEGORY_MAP = {
+    "素菜": "晚餐", "荤菜": "晚餐", "水产": "晚餐", "早餐": "早餐",
+    "主食": "午餐", "半成品加工": "午餐", "汤与粥": "午餐",
+    "饮料": "饮品", "酱料和其它材料": "小吃", "甜品": "甜点",
+}
+# 搜索同义词：用户叫法 → 菜谱库叫法（双向均可，做替换展开）
+_HTC_SYNONYMS = (
+    ("西红柿", "番茄"), ("番茄", "西红柿"),
+    ("土豆", "马铃薯"), ("马铃薯", "土豆"),
+    ("蒜苔", "蒜薹"), ("蒜薹", "蒜苔"),
+    ("香菜", "芫荽"), ("芫荽", "香菜"),
+)
+_htc_cache: dict = {"index": None, "index_ts": 0.0, "dishes": {}}
+_HTC_INDEX_TTL = 24 * 3600
+
+
+def _htc_fetch(url: str, proxy_url: str = "") -> str:
+    req = urllib.request.Request(url, headers={"User-Agent": "what-to-eat-today/1.0"})
+    opener = _make_http_opener(proxy_url)
+    if opener is None:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return resp.read().decode("utf-8")
+    with opener.open(req, timeout=15) as resp:
+        return resp.read().decode("utf-8")
+
+
+def _htc_index(proxy_url: str = "") -> List[dict]:
+    """解析 README 索引：{title, path, category} 列表，内存缓存 24h。"""
+    now = time.time()
+    if _htc_cache["index"] and now - _htc_cache["index_ts"] < _HTC_INDEX_TTL:
+        return _htc_cache["index"]
+    last_err = None
+    for base in HOWTOCOOK_BASES:
+        try:
+            text = _htc_fetch(base + "/README.md", proxy_url)
+            dishes = []
+            cat = "其他"
+            for raw in text.splitlines():
+                s = raw.strip()
+                m = re.match(r"^###\s+(.+)$", s)
+                if m:
+                    cat = m.group(1).strip()
+                    continue
+                m2 = re.match(r"^-\s+\[([^\]]+)\]\(([^)]+\.md)\)", s)
+                if m2:
+                    path = m2.group(2).strip()
+                    if path.startswith("dishes/"):
+                        dishes.append({"title": m2.group(1).strip(), "path": path, "category": cat})
+            if dishes:
+                _htc_cache["index"] = dishes
+                _htc_cache["index_ts"] = now
+                return dishes
+        except Exception as e:
+            last_err = f"{type(e).__name__}: {e}"
+            continue
+    print(f"[recipe-api:howtocook] index FAIL {last_err}", flush=True)
+    return _htc_cache["index"] or []
+
+
+def _parse_htc_recipe(md: str) -> dict:
+    """解析 HowToCook 菜谱 Markdown → {title, ingredients, steps}。
+    食材优先取「## 计算」的「X 用量为 N 单位/人」行（含用量），
+    计算节缺失时才退回「必备原料和工具」（只有名字）。
+    """
+    lines = [ln.strip() for ln in md.splitlines()]
+    title = ""
+    section = ""
+    calc_ingredients = []
+    tool_ingredients = []
+    steps = []
+    for ln in lines:
+        if ln.startswith("# ") and not title:
+            title = ln[2:].strip().rstrip("的做法").strip()
+        elif ln.startswith("## "):
+            section = ln[3:].strip()
+        elif section == "计算" and ln[:1] in ("-", "*"):
+            item = ln[1:].strip().rstrip("、，。")
+            if not item or item.startswith(("使用上述条件", "根据人数", "每次制作", "总量")):
+                continue
+            # 格式1：X用量为 N 单位/人
+            m = re.match(r"^(.+?)用量为\s*([\d.]+)\s*([^/]+)/人", item)
+            if m:
+                calc_ingredients.append({
+                    "name": m.group(1).strip(),
+                    "amount": m.group(2),
+                    "unit": m.group(3).strip(),
+                })
+                continue
+            # 格式1b：名称：约 N 单位（猪五花肉：约 3~4 斤 / 冰糖：15 克（约 7 块）/ 生抽：10ml）
+            m = re.match(r"^(.+?)[：:]\s*(?:约\s*)?([\d.]+(?:[-~][\d.]+)?)\s*([a-zA-Z\u4e00-\u9fff]*)", item)
+            if m and m.group(3).strip():
+                calc_ingredients.append({
+                    "name": m.group(1).strip(),
+                    "amount": m.group(2),
+                    "unit": m.group(3).strip(),
+                })
+                continue
+            # 格式2：西红柿 = 1 个（约 180g）——优先取括号里的精确质量
+            m = re.match(r"^(.+?)\s*=\s*[\d.]+(?:-[\d.]+)?\s*[个根片]?\s*[（(]约\s*([\d.]+)\s*([a-zA-Z]+)[)）]", item)
+            if m:
+                calc_ingredients.append({
+                    "name": m.group(1).strip(),
+                    "amount": m.group(2),
+                    "unit": m.group(3),
+                })
+                continue
+            # 格式3：鸡蛋 = 1.5 个 / 食用油 = 4ml / 盐 = 1.5-2g
+            m = re.match(r"^(.+?)\s*=\s*([\d.]+(?:-[\d.]+)?)\s*([^\s*]*?)\s*[（(*]", item)
+            if m:
+                calc_ingredients.append({
+                    "name": m.group(1).strip(),
+                    "amount": m.group(2),
+                    "unit": m.group(3).strip(),
+                })
+                continue
+            # 格式4：无括号后缀
+            m = re.match(r"^(.+?)\s*=\s*([\d.]+(?:-[\d.]+)?)\s*([a-zA-Z\u4e00-\u9fff]+)?\s*$", item)
+            if m:
+                calc_ingredients.append({
+                    "name": m.group(1).strip(),
+                    "amount": m.group(2),
+                    "unit": (m.group(3) or "").strip(),
+                })
+        elif section == "必备原料和工具" and ln.startswith("-"):
+            name = ln[1:].strip().rstrip("、，。")
+            if name:
+                tool_ingredients.append({"name": name, "amount": "", "unit": ""})
+        elif section == "操作":
+            m = re.match(r"^(\d+)[\.、]\s*(.+)$", ln)
+            if m:
+                steps.append(m.group(2).strip())
+            elif ln and not ln.startswith("#") and not steps:
+                # 操作节第一行若非编号，也收作步骤（兜底）
+                steps.append(ln)
+    ingredients = calc_ingredients or tool_ingredients
+    if not steps:
+        # 兜底：整篇里找编号行
+        for ln in lines:
+            m = re.match(r"^(\d+)[\.、]\s*(.+)$", ln)
+            if m:
+                steps.append(m.group(2).strip())
+    return {"title": title, "ingredients": ingredients, "steps": steps}
 
 # 搜索词翻译专用补充（面向 TheMealDB 召回，不在图片搜索词典里的）
 _DISH_EN_ADDON = {
@@ -735,14 +887,66 @@ def _normalize_meal(m: dict) -> dict:
 @router.get("/search")
 def search_recipes(
     keyword: str,
+    source: Optional[str] = Query(None, pattern="^(themealdb|howtocook)$"),
     conn: sqlite3.Connection = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    """搜索 TheMealDB 菜谱。中文关键词先用内置词典转英文召回。"""
-    proxy_url = (get_setting("proxy_url", "", conn=conn) or "").strip()
+    """搜索菜谱。source=howtocook 走中文开源菜谱库，缺省沿用系统设置 recipe_source。"""
+    src = (source or get_setting("recipe_source", "themealdb", conn=conn) or "themealdb").strip().lower()
     kw = (keyword or "").strip()
     if not kw:
-        return []
+        return {"items": [], "zh_keyword": "", "en_queries": [], "source": src}
+    if src == "howtocook":
+        return _search_howtocook(kw, conn)
+    return _search_themealdb(kw, conn)
+
+
+def _search_howtocook(kw: str, conn) -> dict:
+    proxy_url = (get_setting("proxy_url", "", conn=conn) or "").strip()
+    try:
+        dishes = _htc_index(proxy_url)
+    except Exception:
+        dishes = []
+    if not dishes:
+        raise HTTPException(status_code=502, detail="中文菜谱库加载失败，请检查网络或代理设置")
+    k = kw.strip().lower()
+    # 关键词同义词展开（番茄↔西红柿 等），任一命中即可
+    variants = {k}
+    for a, b in _HTC_SYNONYMS:
+        if a in k:
+            variants.add(k.replace(a, b))
+
+    def _rank(d):
+        t = d["title"].lower()
+        for v in variants:
+            if v in t:
+                return 0  # 完整子串命中
+        for v in variants:
+            vc = [c for c in v if c.strip()]
+            if vc and all(c in t for c in vc):
+                return 1  # 全部字符散落命中（如 番茄炒蛋→西红柿炒鸡蛋）
+        return None
+
+    ranked = []
+    for d in dishes:
+        r = _rank(d)
+        if r is not None:
+            ranked.append((r, d))
+    ranked.sort(key=lambda x: (x[0], len(x[1]["title"])))
+    hits = [d for _, d in ranked]
+    items = [{
+        "id": d["path"],
+        "title": d["title"],
+        "category": _HTC_CATEGORY_MAP.get(d["category"], "晚餐"),
+        "area": "HowToCook 中文菜谱库",
+        "thumb": "",
+        "source": "howtocook",
+    } for d in hits[:20]]
+    return {"items": items, "zh_keyword": kw, "en_queries": [], "source": "howtocook"}
+
+
+def _search_themealdb(kw: str, conn) -> dict:
+    proxy_url = (get_setting("proxy_url", "", conn=conn) or "").strip()
     is_zh, zh_disp, en_queries = _translate_keyword_to_en(kw, proxy_url)
     terms: List[str] = []
     seen: set = set()
@@ -774,6 +978,7 @@ def search_recipes(
         "items": out,
         "zh_keyword": zh_disp if is_zh else "",
         "en_queries": [t for t in terms if not _is_chinese(t)],
+        "source": "themealdb",
     }
 
 
@@ -812,6 +1017,7 @@ class RecipeImportBody(BaseModel):
     ingredients: List[IngredientItem] = []
     steps: List[str] = []
     translate: Optional[int] = None  # 1=开 0=关；缺省用系统设置 recipe_translate
+    source: Optional[str] = None     # themealdb | howtocook
 
 
 _DESSERT_HINTS = ("dessert", "cake", "pie", "cookie", "sweet", "pudding", "muffin")
@@ -823,7 +1029,11 @@ def prepare_import(
     conn: sqlite3.Connection = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    """把 TheMealDB 菜谱做英转中，返回可直接填充表单的结构（可再编辑）。"""
+    """把选中菜谱转成可直接填充表单的结构（可再编辑）。
+    source=howtocook 时直接拉取并解析中文 Markdown，无需英转中。"""
+    if (body.source or "").strip().lower() == "howtocook":
+        return _prepare_howtocook(body, conn)
+
     if body.translate is not None:
         do_translate = bool(body.translate)
     else:
@@ -870,6 +1080,54 @@ def prepare_import(
         "original_title": (body.title or "").strip() if do_translate else "",
     }
     return payload
+
+
+def _prepare_howtocook(body: RecipeImportBody, conn) -> dict:
+    """HowToCook：按 path 拉取 Markdown 并解析，食材/步骤已是中文，直接返回。"""
+    path = (body.id or "").strip()
+    if not path:
+        raise HTTPException(status_code=400, detail="缺少菜谱路径")
+    proxy_url = (get_setting("proxy_url", "", conn=conn) or "").strip()
+    # 路径含中文，逐段 URL 编码后再拼接
+    path_q = "/".join(urllib.parse.quote(seg) for seg in path.split("/"))
+    md = None
+    last_err = None
+    for base in HOWTOCOOK_BASES:
+        try:
+            md = _htc_fetch(base + "/" + path_q, proxy_url)
+            if md:
+                break
+        except Exception as e:
+            last_err = f"{type(e).__name__}: {e}"
+            continue
+    if not md:
+        raise HTTPException(status_code=502, detail=f"菜谱内容拉取失败: {last_err}")
+    parsed = _parse_htc_recipe(md)
+    if not parsed.get("title") and not parsed.get("steps"):
+        raise HTTPException(status_code=502, detail="菜谱格式无法解析")
+    title = parsed.get("title") or (body.title or "").strip()
+    cat = (body.category or "").strip()
+    if cat not in ("早餐", "午餐", "晚餐", "甜点", "小吃", "饮品"):
+        cat = _HTC_CATEGORY_MAP.get(cat, "")
+    ingredients = [
+        {"name": ing["name"], "amount": ing.get("amount") or "", "unit": ing.get("unit") or ""}
+        for ing in parsed.get("ingredients") or []
+    ]
+    return {
+        "title": title,
+        "category": cat,
+        "image_path": "",
+        "servings": 2,
+        "meal_tags": ["lunch", "dinner"],
+        "ingredients": ingredients,
+        "steps": [{"description": s} for s in (parsed.get("steps") or [])],
+        "prep_time": None,
+        "cook_time": None,
+        "source": "howtocook",
+        "source_id": path,
+        "source_url": "https://github.com/Anduin2017/HowToCook/blob/master/" + path,
+        "original_title": "",
+    }
 
 
 # ---------- 粘贴解析 ----------

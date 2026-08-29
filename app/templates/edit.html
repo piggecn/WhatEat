@@ -138,8 +138,20 @@
 
           <!-- 搜索 Tab -->
             <div x-show="recipeImport.tab==='search'">
+              <div class="flex flex-wrap items-center gap-1 mb-2">
+                <button type="button" @click="setRecipeSource('themealdb')"
+                        :class="recipeImport.source==='themealdb' ? 'bg-[var(--fr-primary)] text-white border-[var(--fr-primary)]' : 'border-border text-muted-foreground hover:border-[var(--fr-primary)] hover:text-primary'"
+                        class="h-8 px-2.5 rounded-lg border transition-colors text-xs shrink-0">
+                  🥩 TheMealDB（英文）
+                </button>
+                <button type="button" @click="setRecipeSource('howtocook')"
+                        :class="recipeImport.source==='howtocook' ? 'bg-[var(--fr-primary)] text-white border-[var(--fr-primary)]' : 'border-border text-muted-foreground hover:border-[var(--fr-primary)] hover:text-primary'"
+                        class="h-8 px-2.5 rounded-lg border transition-colors text-xs shrink-0">
+                  🥘 中文菜谱库（免 Key）
+                </button>
+              </div>
               <div class="flex flex-col sm:flex-row items-stretch gap-2 mb-2">
-                <button type="button" @click="toggleZhEn()"
+                <button type="button" @click="toggleZhEn()" x-show="recipeImport.source==='themealdb'"
                         :title="recipeImport.enMode ? '切回中文搜索' : '转为英文搜索'"
                         :class="recipeImport.enMode ? 'bg-[var(--fr-primary)] text-white border-[var(--fr-primary)]' : 'border-border text-muted-foreground hover:border-[var(--fr-primary)] hover:text-primary'"
                         class="h-10 px-3 rounded-lg border transition-colors shrink-0 flex items-center justify-center gap-1">
@@ -148,7 +160,8 @@
                 </button>
                 <div class="flex flex-1 min-w-0 gap-2">
                   <input type="text" x-model="recipeImport.keyword" @keydown.enter.prevent="doRecipeSearch()"
-                         placeholder="输入菜名（中英文均可）" class="fr-input flex-1 min-w-0 h-10">
+                         :placeholder="recipeImport.source==='howtocook' ? '输入菜名，如：番茄炒蛋、红烧肉' : '输入菜名（中英文均可）'"
+                         class="fr-input flex-1 min-w-0 h-10">
                   <button type="button" @click="doRecipeSearch()" :disabled="recipeImport.loading || !recipeImport.keyword.trim()"
                           class="fr-btn fr-btn-primary h-10 disabled:opacity-60 shrink-0">
                     <i data-lucide="search" class="w-4 h-4"></i>
@@ -166,9 +179,9 @@
             </p>
             <div x-show="!recipeImport.loading && recipeImport.results.length > 0" class="space-y-2 max-h-72 overflow-y-auto pr-1">
               <template x-for="r in recipeImport.results" :key="r.id">
-                <button type="button" @click="selectRecipe(r)" :class="recipeImport.selected && recipeImport.selected.original_title && recipeImport.selected.source_id === r.id ? 'border-[var(--fr-primary)] ring-2 ring-[var(--fr-primary)]/30' : 'border-border hover:border-[var(--fr-primary)]'"
+                <button type="button" @click="selectRecipe(r)" :class="recipeImport.selected && recipeImport.selected.source_id === r.id ? 'border-[var(--fr-primary)] ring-2 ring-[var(--fr-primary)]/30' : 'border-border hover:border-[var(--fr-primary)]'"
                         class="w-full text-left flex items-center gap-3 p-2 rounded-xl border bg-card transition-all">
-                  <img :src="r.thumb" class="w-12 h-12 rounded-lg object-cover shrink-0" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.visibility='hidden'">
+                  <img :src="r.thumb" x-show="r.thumb" class="w-12 h-12 rounded-lg object-cover shrink-0" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.visibility='hidden'">
                   <span class="min-w-0 flex-1">
                     <span class="block truncate fr-body font-medium" x-text="r.title"></span>
                     <span class="block fr-caption text-muted-foreground" x-text="(r.area ? r.area + ' · ' : '') + (r.category || '')"></span>
