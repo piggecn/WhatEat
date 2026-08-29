@@ -1,3 +1,13 @@
+# ---- Tailwind CSS 编译阶段（每次构建自动重编，模板改动无需手工编译） ----
+FROM node:22-alpine AS css
+WORKDIR /src/static/css
+COPY static/css/input.css .
+COPY app/templates /src/app/templates
+COPY static/js /src/static/js
+RUN npm install --no-save tailwindcss@4.3.3 @tailwindcss/cli@4.3.3 \
+    && npx tailwindcss -i ./input.css -o ./tailwind.css \
+    && rm -rf node_modules package.json package-lock.json
+
 FROM python:3.12-slim AS builder
 ENV PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1
 WORKDIR /app
@@ -14,6 +24,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 COPY --from=builder /install /usr/local
 COPY . .
+COPY --from=css /src/static/css/tailwind.css /app/static/css/tailwind.css
 RUN useradd -r -u 1000 whateat \
     && mkdir -p /app/data/uploads \
     && chown -R whateat:whateat /app

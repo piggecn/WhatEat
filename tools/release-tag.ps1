@@ -51,9 +51,18 @@ try {
         if ([version]$Version -le [version]$latest) { throw "version not increasing: $Version <= $latest" }
     }
 
+    # 同步 compose 的 APP_VERSION 兜底值（本地/服务器 compose 保持一致）
+    $composeFile = Join-Path $Repo 'docker-compose.yml'
+    if (Test-Path $composeFile) {
+        $raw = [System.IO.File]::ReadAllText($composeFile, [System.Text.Encoding]::UTF8)
+        $raw = [regex]::Replace($raw, '\$\{APP_VERSION:-[0-9][0-9.]*\}', '${APP_VERSION:-' + $Version + '}')
+        [System.IO.File]::WriteAllText($composeFile, $raw, (New-Object System.Text.UTF8Encoding($false)))
+        Write-Host 'docker-compose.yml APP_VERSION default synced'
+    }
+
     $env:GIT_TERMINAL_PROMPT = '0'
     # 更新说明随 main 一起提交，保证 tag 指向的版本里包含 RELEASE_NOTES.md
-    git add RELEASE_NOTES.md
+    git add RELEASE_NOTES.md docker-compose.yml
     git diff --cached --quiet
     if ($LASTEXITCODE -ne 0) {
         git -c user.name=piggecn -c user.email=hu85454@gmail.com commit -m "docs: release notes for v$Version" --quiet

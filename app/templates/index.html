@@ -1,5 +1,8 @@
 {% extends "base.html" %}
-{% block title %}{% if page == 'favorites' %}我的收藏{% else %}食谱首页{% endif %} · 今天吃点啥{% endblock %}
+{% block title %}{% if page == 'favorites' %}我的收藏{% else %}食谱首页{% endif %} · 今天吃点啥
+
+
+{% endblock %}
 
 {% block content %}
 <div x-data="indexPage('{{ current_category }}', '{{ current_sort if current_sort else 'added_desc' }}')" class="min-h-screen">
@@ -65,6 +68,10 @@
           <span class="text-2xl">🤔</span>
           <span>今天吃点啥？</span>
           <i data-lucide="shuffle" class="w-5 h-5 opacity-80"></i>
+        </button>
+        <button @click="$dispatch('inventory-open')" class="fr-btn fr-btn-secondary">
+          <i data-lucide="refrigerator" class="w-4 h-4"></i>
+          我的库存
         </button>
         {% if today_meals %}
         <!-- 今日已选菜单条（按早/午/晚分组 + 删除） -->
@@ -184,6 +191,10 @@
             <label class="flex items-center gap-2 cursor-pointer select-none fr-caption text-muted-foreground">
               <input type="checkbox" x-model="rand.excludeRecent" @change="fetchRandom()" class="w-4 h-4 accent-[var(--fr-primary)] rounded border-border">
               排除最近 3 天吃过
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer select-none fr-caption text-muted-foreground">
+              <input type="checkbox" x-model="rand.onlyStock" @change="fetchRandom()" class="w-4 h-4 accent-[var(--fr-primary)] rounded border-border">
+              仅用现有食材
             </label>
           </div>
           <!-- 底部按钮 -->
@@ -333,4 +344,49 @@
     {% endif %}
   </main>
 </div>
+  <!-- 我的库存弹窗（独立组件，事件驱动） -->
+  <div x-data="inventoryPanel()" x-show="open" x-cloak
+       @inventory-open.window="open = true; load()"
+       class="fixed inset-0 z-50" aria-modal="true" role="dialog" @keydown.escape.window="open = false">
+    <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="open = false"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+      <div class="bg-card w-full max-w-md max-h-[85vh] rounded-2xl shadow-3 border border-border overflow-hidden flex flex-col">
+        <div class="p-5 border-b border-border flex items-center justify-between">
+          <h3 class="fr-h2 flex items-center gap-2">
+            <i data-lucide="refrigerator" class="w-5 h-5 text-primary"></i>
+            我的库存
+          </h3>
+          <button @click="open = false" class="w-8 h-8 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+        <div class="p-4 border-b border-border">
+          <div class="flex items-center gap-2">
+            <input type="text" x-model="form.name" @keydown.enter.prevent="add()" placeholder="食材名，如：鸡蛋" maxlength="50" class="fr-input flex-1">
+            <input type="text" x-model="form.amount" placeholder="数量" class="fr-input w-20">
+            <input type="text" x-model="form.unit" placeholder="单位" class="fr-input w-20">
+            <button @click="add()" :disabled="adding" class="fr-btn fr-btn-primary h-10 px-4 shrink-0">添加</button>
+          </div>
+          <p class="fr-caption text-muted-foreground mt-2">推荐时勾选「仅用现有食材」，就能只看手头能做的菜。</p>
+        </div>
+        <div class="flex-1 overflow-y-auto p-4">
+          <div x-show="loading" class="py-8 text-center fr-caption text-muted-foreground">加载中…</div>
+          <div x-show="!loading && items.length === 0" class="py-8 text-center fr-caption text-muted-foreground">库存是空的，先添加几样食材吧</div>
+          <ul class="space-y-2">
+            <template x-for="(item, idx) in items" :key="'inv-' + idx">
+              <li class="flex items-center gap-3 p-3 rounded-xl bg-muted/50">
+                <div class="flex-1">
+                  <p class="fr-body" x-text="item.name"></p>
+                  <p class="fr-caption text-muted-foreground" x-text="(item.amount || '') + (item.unit ? ' ' + item.unit : '')"></p>
+                </div>
+                <button @click="remove(item.id)" class="w-8 h-8 rounded-lg hover:bg-[var(--fr-state-error-soft)] hover:text-[var(--fr-state-error)] flex items-center justify-center text-muted-foreground">
+                  <i data-lucide="trash-2" class="w-4 h-4"></i>
+                </button>
+              </li>
+            </template>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
 {% endblock %}

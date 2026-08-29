@@ -115,6 +115,28 @@
 
     <!-- 月视图 -->
     <div x-show="tab === 'month'" x-cloak>
+      <!-- 本月统计 -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+        <div class="fr-card p-4">
+          <p class="fr-caption text-muted-foreground mb-1">本月已安排</p>
+          <p class="fr-h2" x-text="monthStats.totalMeals + ' 餐'"></p>
+        </div>
+        <div class="fr-card p-4 sm:col-span-2">
+          <p class="fr-caption text-muted-foreground mb-2">最常安排 TOP5</p>
+          <div x-show="monthStats.topRecipes.length === 0" class="fr-caption text-muted-foreground py-1">本月还没有安排</div>
+          <div class="space-y-1.5">
+            <template x-for="(r, ri) in monthStats.topRecipes" :key="'top-' + ri">
+              <div class="flex items-center gap-2">
+                <span class="fr-caption w-24 truncate shrink-0" x-text="r.name"></span>
+                <div class="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                  <div class="h-full rounded-full bg-primary" :style="'width:' + Math.max(r.pct, 6) + '%'"></div>
+                </div>
+                <span class="fr-caption text-muted-foreground w-10 text-right shrink-0" x-text="r.count + ' 次'"></span>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
       <!-- 顶部切换箭头 + 月份 -->
       <div class="flex items-center justify-between mb-4">
         <button @click="prevMonth()" class="fr-btn fr-btn-ghost w-10 h-10 p-0 rounded-full">

@@ -198,6 +198,38 @@ def init_db() -> None:
     except Exception:
         pass
 
+    # ---- 点赞与评论 ----
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS recipe_likes ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "recipe_id INTEGER REFERENCES recipes(id) ON DELETE CASCADE, "
+        "user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, "
+        "created_at TEXT DEFAULT CURRENT_TIMESTAMP, "
+        "UNIQUE(recipe_id, user_id))"
+    )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS recipe_comments ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "recipe_id INTEGER REFERENCES recipes(id) ON DELETE CASCADE, "
+        "user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, "
+        "content TEXT NOT NULL, "
+        "created_at TEXT DEFAULT CURRENT_TIMESTAMP)"
+    )
+    conn.commit()
+
+    # ---- 食材库存 ----
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS inventory ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, "
+        "name TEXT NOT NULL, "
+        "amount TEXT, "
+        "unit TEXT, "
+        "created_at TEXT DEFAULT CURRENT_TIMESTAMP, "
+        "UNIQUE(user_id, name))"
+    )
+    conn.commit()
+
     # ---- system_settings 表 ----
     conn.execute(
         "CREATE TABLE IF NOT EXISTS system_settings ("

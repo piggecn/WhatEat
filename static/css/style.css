@@ -298,3 +298,31 @@ img { -webkit-user-drag: none; user-select: none; }
 
 /* 日历网格性能：跳过视口外单元格的布局与绘制 */
 .cal-cell { content-visibility: auto; contain-intrinsic-size: auto 100px; }
+
+/* ===== 深色主题 ===== */
+html.dark {
+  --fr-primary: #FF8A55;
+  --fr-primary-foreground: #1A1512;
+  --fr-primary-hover: #FF9D70;
+  --fr-primary-soft: #3A2418;
+  --fr-background: #171310;
+  --fr-foreground: #EDE6DF;
+  --fr-card: #201A16;
+  --fr-card-foreground: #EDE6DF;
+  --fr-popover: #28211C;
+  --fr-popover-foreground: #EDE6DF;
+  --fr-muted: #2B241F;
+  --fr-muted-foreground: #A79B90;
+  --fr-border: #3A312A;
+  --fr-input: #3A312A;
+  --fr-ring: #FF8A55;
+  --fr-state-success: #4FC08D;
+  --fr-state-success-foreground: #10241A;
+  --fr-state-success-soft: #16291F;
+  --fr-state-warning: #F0B654;
+  --fr-state-error: #FF6B6B;
+  --fr-state-info: #6FA8FF;
+  --fr-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --fr-shadow-2: 0 8px 24px -8px rgba(0, 0, 0, 0.5);
+  --fr-shadow-3: 0 24px 60px -20px rgba(0, 0, 0, 0.6);
+}

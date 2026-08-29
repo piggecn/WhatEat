@@ -73,6 +73,10 @@ class PasswordChange(BaseModel):
     new_password: str = Field(min_length=1, max_length=100)
 
 
+class CommentCreate(BaseModel):
+    content: str = Field(min_length=1, max_length=500)
+
+
 # ---- Recipe 子结构 ----
 class IngredientIn(BaseModel):
     name: str

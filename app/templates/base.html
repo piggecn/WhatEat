@@ -11,6 +11,18 @@
   <link rel="shortcut icon" type="image/png" href="/static/logo.png" />
   <link rel="stylesheet" href="/static/css/tailwind.css?v={{ APP_VERSION }}" />
   <link rel="stylesheet" href="/static/css/style.css?v={{ APP_VERSION }}" />
+  <script>
+    (function () {
+      var saved = localStorage.getItem('whateat-theme');
+      if (saved === 'dark') document.documentElement.classList.add('dark');
+      else document.documentElement.classList.remove('dark');
+      window.toggleTheme = function () {
+        var dark = document.documentElement.classList.toggle('dark');
+        localStorage.setItem('whateat-theme', dark ? 'dark' : 'light');
+        if (window.lucide && window.lucide.createIcons) window.lucide.createIcons();
+      };
+    })();
+  </script>
   <script src="/static/js/lucide.min.js?v={{ APP_VERSION }}"></script>
   <script defer src="/static/js/alpine.min.js?v={{ APP_VERSION }}"></script>
   <script src="/static/js/app.js?v={{ APP_VERSION }}"></script>
@@ -36,6 +48,9 @@
 
         <!-- 右：用户头像 + 下拉菜单（管理中心[管理员]/个人中心/关于/退出） -->
         <div class="relative shrink-0" @click.away="userOpen = false">
+          <button type="button" onclick="toggleTheme()" aria-label="切换深浅色" class="fr-btn fr-btn-ghost w-10 h-10 p-0 rounded-full mr-1">
+            <i data-lucide="moon-star" class="w-5 h-5"></i>
+          </button>
           <button @click="userOpen = !userOpen" class="flex items-center gap-2 h-10 pl-1 pr-2 rounded-full hover:bg-muted transition-colors" aria-label="用户菜单">
             {{ avatar_html(current_user.avatar, current_user.display_name, current_user.username, 32) | safe }}
             <span class="hidden sm:block fr-body">{{ current_user.display_name or current_user.username }}</span>

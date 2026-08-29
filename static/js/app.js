@@ -133,7 +133,8 @@ function indexPage(currentCategory, currentSort) {
       open: false,
       loading: false,
       error: '',
-      recipe: {},
+      recipe: null,
+      onlyStock: false,
       category: '',
       meal_type: '',
       excludeRecent: false,
@@ -193,6 +194,7 @@ function indexPage(currentCategory, currentSort) {
         if (this.rand.category) params.set('category', this.rand.category);
         if (this.rand.meal_type) params.set('meal_type', this.rand.meal_type);
         if (this.rand.excludeRecent) params.set('exclude_recent_days', 3);
+        if (this.rand.onlyStock) params.set('only_in_stock', 'true');
         const res = await RecipeApp.api('/api/recipes/random?' + params.toString());
         if (res.status === 404) {
           this.rand.error = '没有符合条件的食谱，调整筛选再试试';
@@ -249,6 +251,34 @@ function indexPage(currentCategory, currentSort) {
       if (this._randToastTimer) clearTimeout(this._randToastTimer);
       this._randToastTimer = setTimeout(() => { this.rand.toast = ''; }, 2500);
     },
+  };
+}
+
+/* 烹饪模式：全屏大字步骤 + 计时器 */
+function cookMode(steps) {
+  return {
+    open: false,
+    steps: steps || [],
+    idx: 0,
+    seconds: 0,
+    timerId: null,
+    get current() { return this.steps[this.idx] || null; },
+    get timeText() {
+      const m = String(Math.floor(this.seconds / 60)).padStart(2, '0');
+      const sec = String(this.seconds % 60).padStart(2, '0');
+      return m + ':' + sec;
+    },
+    start() {
+      this.open = true;
+      this.idx = 0;
+      this.stopTimer();
+      this.seconds = 0;
+      this.timerId = setInterval(() => { this.seconds += 1; }, 1000);
+    },
+    stopTimer() { if (this.timerId) { clearInterval(this.timerId); this.timerId = null; } },
+    next() { if (this.idx < this.steps.length - 1) this.idx += 1; },
+    prev() { if (this.idx > 0) this.idx -= 1; },
+    exit() { this.stopTimer(); this.open = false; },
   };
 }
 
@@ -1476,6 +1506,7 @@ function calendarPage() {
     weekDays: [],
     monthYear: '',
     monthDays: [],
+    monthStats: { totalMeals: 0, topRecipes: [] },
     mealRows: [
       { key: 'breakfast', label: '早餐', icon: 'sunrise' },
       { key: 'lunch', label: '午餐', icon: 'sun' },
@@ -1644,6 +1675,24 @@ function calendarPage() {
             };
           }
           this.buildMonthDays(mealsByDate);
+          // 本月统计
+          const counter = {};
+          let total = 0;
+          for (const d of apiDays) {
+            for (const mt of ['breakfast', 'lunch', 'dinner']) {
+              for (const slot of (d[mt] || [])) {
+                const t = (slot && slot.title) || '';
+                if (!t) continue;
+                counter[t] = (counter[t] || 0) + 1;
+                total += 1;
+              }
+            }
+          }
+          const topRecipes = Object.entries(counter)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .map(([name, count]) => ({ name, count, pct: total ? Math.round(count * 100 / total) : 0 }));
+          this.monthStats = { totalMeals: total, topRecipes };
         } else {
           this.buildMonthDays({});
         }
@@ -1817,6 +1866,101 @@ function calendarPage() {
 
     closeShopping() {
       this.shoppingOpen = false;
+    },
+  };
+}
+
+/* 详情页点赞 + 评论 */
+function likeComment() {
+  return {
+    recipeId: document.body.getAttribute('data-recipe-id') || (window.location.pathname.split('/').filter(Boolean).pop() || ''),
+    liked: false,
+    likesCount: 0,
+    comments: [],
+    draft: '',
+    sending: false,
+    async init() {
+      const id = parseInt(this.recipeId, 10);
+      if (!id) return;
+      try {
+        const res = await RecipeApp.api('/api/recipes/' + id + '/comments');
+        if (res.ok) { const d = await res.json(); this.comments = d.comments || []; }
+      } catch (e) {}
+    },
+    async toggleLike() {
+      const id = parseInt(this.recipeId, 10);
+      if (!id) return;
+      try {
+        const res = await RecipeApp.api('/api/recipes/' + id + '/like', { method: 'POST' });
+        if (res.ok) {
+          const d = await res.json();
+          this.liked = d.liked;
+          this.likesCount = d.likes_count;
+        }
+      } catch (e) {}
+    },
+    async submitComment() {
+      const text = (this.draft || '').trim();
+      if (!text || this.sending) return;
+      this.sending = true;
+      try {
+        const id = parseInt(this.recipeId, 10);
+        const res = await RecipeApp.api('/api/recipes/' + id + '/comments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: text }),
+        });
+        if (res.ok) {
+          this.draft = '';
+          await this.init();
+        }
+      } catch (e) {}
+      finally { this.sending = false; }
+    },
+  };
+}
+
+/* 我的库存弹窗 */
+function inventoryPanel() {
+  return {
+    open: false,
+    loading: false,
+    items: [],
+    form: { name: '', amount: '', unit: '' },
+    adding: false,
+    async load() {
+      this.loading = true;
+      try {
+        const res = await RecipeApp.api('/api/inventory');
+        if (res.ok) {
+          const d = await res.json();
+          this.items = d.items || [];
+        } else { this.items = []; }
+      } catch (e) { this.items = []; }
+      finally { this.loading = false; }
+    },
+    async add() {
+      const name = (this.form.name || '').trim();
+      if (!name) return;
+      this.adding = true;
+      try {
+        const res = await RecipeApp.api('/api/inventory', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: name, amount: this.form.amount || null, unit: this.form.unit || null }),
+        });
+        if (res.ok) {
+          this.form = { name: '', amount: '', unit: '' };
+          await this.load();
+        }
+      } catch (e) {}
+      finally { this.adding = false; }
+    },
+    async remove(id) {
+      try {
+        await RecipeApp.api('/api/inventory/' + id, { method: 'DELETE' });
+        await this.load();
+      } catch (e) {}
     },
   };
 }

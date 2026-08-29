@@ -64,6 +64,7 @@ def get_random_recipe(
     category: Optional[str] = None,
     meal_type: Optional[str] = None,
     exclude_recent_days: int = Query(0, ge=0, le=365),
+    only_in_stock: bool = Query(False, description="只推荐现有食材可做的菜"),
     db: sqlite3.Connection = Depends(get_db),
     user=Depends(get_current_user),
 ):
@@ -89,6 +90,13 @@ def get_random_recipe(
     urow = db.execute("SELECT avoid_tags FROM users WHERE id = ?", (user["id"],)).fetchone()
     avoid = _parse_diet_tags(urow["avoid_tags"]) if urow else []
 
+    # 现有食材清单（only_in_stock 时用）
+    stock = set()
+    if only_in_stock:
+        stock = {r["name"] for r in db.execute(
+            "SELECT name FROM inventory WHERE user_id = ?", (user["id"],)
+        ).fetchall()}
+
     # 食谱数 < 5 自动放宽排除条件
     eff_exclude = exclude_recent_days if total_count >= 5 else 0
 
@@ -113,13 +121,17 @@ def get_random_recipe(
     fallback_level = 0
     for idx, (cat, mt, ed) in enumerate(ordered):
         fallback_level = idx
-        row = _try_one(db, user["id"], cat, mt, ed, avoid)
+        row = _try_one(db, user["id"], cat, mt, ed, avoid, stock if only_in_stock else None)
         if row:
             break
 
     if not row:
         # 根据是否有筛选条件给出不同提示
-        if avoid and total_count > 0:
+        if only_in_stock and not stock:
+            msg = "库存是空的，先到「我的库存」里添加食材吧"
+        elif only_in_stock and total_count > 0:
+            msg = "现有食材凑不出一道菜，去补点食材或放宽条件吧"
+        elif avoid and total_count > 0:
             msg = "按你的忌口设置，这个条件下没有可选的食谱了"
         elif category or meal_type:
             msg = "这个条件下没有可选的食谱了"
@@ -175,7 +187,7 @@ def get_random_recipe(
     })
 
 
-def _try_one(db: sqlite3.Connection, user_id: int, category: Optional[str], meal_type: Optional[str], exclude_days: int, avoid: Optional[list] = None):
+def _try_one(db: sqlite3.Connection, user_id: int, category: Optional[str], meal_type: Optional[str], exclude_days: int, avoid: Optional[list] = None, stock: Optional[set] = None):
     where = []
     params: list = []
     if category:
@@ -208,5 +220,12 @@ def _try_one(db: sqlite3.Connection, user_id: int, category: Optional[str], meal
         dt = _parse_diet_tags(r["diet_tags"] if "diet_tags" in r.keys() else None)
         if avoid and (set(dt) & set(avoid)):
             continue
+        # 仅用现有食材：菜谱全部食材名都必须在库存里（无食材信息的菜谱放行）
+        if stock is not None:
+            ings = [i["name"] for i in db.execute(
+                "SELECT name FROM ingredients WHERE recipe_id = ?", (r["id"],)
+            ).fetchall()]
+            if ings and not all(any(ing and (ing in s or s in ing) for s in stock) for ing in ings):
+                continue
         return r
     return None

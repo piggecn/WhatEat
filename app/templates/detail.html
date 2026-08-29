@@ -3,6 +3,40 @@
 
 {% block content %}
 <div x-data="detailPage({{ recipe_id }}, {% if recipe.is_favorite %}true{% else %}false{% endif %})" class="pb-28">
+  <!-- 烹饪模式按钮与全屏层（嵌套组件） -->
+  <script>window.__RECIPE_STEPS__ = {{ recipe.steps | map(attribute='description') | list | tojson }};</script>
+  <div x-data="cookMode(window.__RECIPE_STEPS__)">
+    <button type="button" @click="start()" class="fixed bottom-24 right-6 z-40 fr-btn fr-btn-primary shadow-lg rounded-full h-14 px-6">
+      <i data-lucide="chef-hat" class="w-5 h-5"></i>
+      烹饪模式
+    </button>
+    <div x-show="open" x-cloak class="fixed inset-0 z-50 bg-background flex flex-col">
+      <div class="flex items-center justify-between p-4 border-b border-border">
+        <p class="fr-label text-muted-foreground" x-text="(idx + 1) + ' / ' + steps.length"></p>
+        <p class="fr-h3 text-primary font-mono" x-text="timeText"></p>
+        <button @click="exit()" class="fr-btn fr-btn-ghost h-10 px-4">
+          <i data-lucide="x" class="w-5 h-5"></i>
+          退出
+        </button>
+      </div>
+      <div class="flex-1 flex items-center justify-center px-6 py-10 overflow-y-auto">
+        <div class="max-w-2xl w-full text-center">
+          <p class="fr-caption text-muted-foreground mb-4">步骤 <span x-text="idx + 1"></span></p>
+          <p class="text-2xl sm:text-4xl font-semibold leading-relaxed whitespace-pre-wrap" x-text="current"></p>
+        </div>
+      </div>
+      <div class="p-4 border-t border-border flex items-center justify-between gap-4">
+        <button @click="prev()" :disabled="idx === 0" class="fr-btn fr-btn-secondary h-12 flex-1 disabled:opacity-40">
+          <i data-lucide="arrow-left" class="w-5 h-5"></i>
+          上一步
+        </button>
+        <button @click="next()" :disabled="idx === steps.length - 1" class="fr-btn fr-btn-primary h-12 flex-1 disabled:opacity-40">
+          下一步
+          <i data-lucide="arrow-right" class="w-5 h-5"></i>
+        </button>
+      </div>
+    </div>
+  </div>
   <!-- Hero -->
   <section class="relative w-full aspect-video max-h-[420px] overflow-hidden">
     {% if recipe.image_path %}
@@ -188,4 +222,38 @@
     <span x-text="mealToast"></span>
   </div>
 </div>
+      <!-- 点赞 + 家人点评 -->
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6" x-data="likeComment()" x-init="liked = {{ 'true' if recipe.is_liked else 'false' }}; likesCount = {{ recipe.likes_count }}; recipeId = '{{ recipe_id }}'">
+        <div class="flex items-center gap-3 mb-4">
+          <button type="button" @click="toggleLike()"
+                  :class="liked ? 'border-[var(--fr-primary)] bg-[var(--fr-primary-soft)] text-primary' : 'border-border bg-card text-muted-foreground hover:border-[var(--fr-primary)]'"
+                  class="rounded-full border px-5 py-2.5 flex items-center gap-2 fr-body transition-colors">
+            <i data-lucide="thumbs-up" class="w-4 h-4"></i>
+            <span x-text="liked ? '已赞' : '点赞'"></span>
+            <span class="fr-caption" x-text="likesCount"></span>
+          </button>
+          <p class="fr-caption text-muted-foreground">家人的点赞和点评会展示在这里</p>
+        </div>
+        <div class="fr-card p-5">
+          <h3 class="fr-h2 mb-4">家人点评 <span class="fr-caption text-muted-foreground" x-text="'(' + comments.length + ')'"></span></h3>
+          <div class="flex items-center gap-3 mb-4">
+            <input type="text" x-model="draft" @keydown.enter.prevent="submitComment()" placeholder="说点什么，如：孩子最爱这道～" maxlength="500" class="fr-input flex-1">
+            <button type="button" @click="submitComment()" :disabled="sending" class="fr-btn fr-btn-primary h-10 px-5">发表</button>
+          </div>
+          <div x-show="comments.length === 0" class="fr-caption text-muted-foreground py-4 text-center">还没有点评，来做第一个吧</div>
+          <ul class="space-y-3">
+            <template x-for="(c, ci) in comments" :key="'cm-' + c.id">
+              <li class="flex items-start gap-3 p-3 rounded-xl bg-muted/50">
+                <span class="w-8 h-8 rounded-full bg-primary/15 text-primary flex items-center justify-center fr-caption shrink-0" x-text="(c.display_name || c.username || '?').slice(0, 1)"></span>
+                <div class="flex-1">
+                  <p class="fr-caption font-medium" x-text="c.display_name || c.username"></p>
+                  <p class="fr-body" x-text="c.content"></p>
+                  <p class="fr-caption text-muted-foreground" x-text="(c.created_at || '').slice(0, 10)"></p>
+                </div>
+              </li>
+            </template>
+          </ul>
+        </div>
+      </div>
+
 {% endblock %}
