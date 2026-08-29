@@ -57,7 +57,7 @@
             <i data-lucide="chevron-down" class="w-4 h-4 text-muted-foreground hidden sm:block" :class="userOpen ? 'rotate-180' : ''"></i>
           </button>
           <div x-show="userOpen" x-transition.origin.top.right x-cloak
-               class="absolute right-0 mt-2 w-52 rounded-2xl bg-card border border-border shadow-2 overflow-hidden">
+               class="absolute top-full right-0 mt-2 w-52 rounded-2xl bg-card border border-border shadow-2 overflow-hidden">
             {% if current_user.is_admin %}
             <a href="/admin" @click="userOpen = false" class="flex items-center gap-3 px-4 py-3 hover:bg-muted transition-colors {% if page == 'admin' %}bg-primary/5 text-primary{% endif %}">
               <i data-lucide="settings-2" class="w-4 h-4"></i>管理中心
