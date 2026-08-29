@@ -1938,64 +1938,14 @@ function calendarPage() {
   };
 }
 
-/* 详情页点赞 + 评论 */
-function likeComment() {
+/* 家里剩啥（库存页） */
+function inventoryPage() {
   return {
-    recipeId: document.body.getAttribute('data-recipe-id') || (window.location.pathname.split('/').filter(Boolean).pop() || ''),
-    liked: false,
-    likesCount: 0,
-    comments: [],
-    draft: '',
-    sending: false,
-    async init() {
-      const id = parseInt(this.recipeId, 10);
-      if (!id) return;
-      try {
-        const res = await RecipeApp.api('/api/recipes/' + id + '/comments');
-        if (res.ok) { const d = await res.json(); this.comments = d.comments || []; }
-      } catch (e) {}
-    },
-    async toggleLike() {
-      const id = parseInt(this.recipeId, 10);
-      if (!id) return;
-      try {
-        const res = await RecipeApp.api('/api/recipes/' + id + '/like', { method: 'POST' });
-        if (res.ok) {
-          const d = await res.json();
-          this.liked = d.liked;
-          this.likesCount = d.likes_count;
-        }
-      } catch (e) {}
-    },
-    async submitComment() {
-      const text = (this.draft || '').trim();
-      if (!text || this.sending) return;
-      this.sending = true;
-      try {
-        const id = parseInt(this.recipeId, 10);
-        const res = await RecipeApp.api('/api/recipes/' + id + '/comments', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: text }),
-        });
-        if (res.ok) {
-          this.draft = '';
-          await this.init();
-        }
-      } catch (e) {}
-      finally { this.sending = false; }
-    },
-  };
-}
-
-/* 我的库存弹窗 */
-function inventoryPanel() {
-  return {
-    open: false,
-    loading: false,
+    loading: true,
     items: [],
     form: { name: '', amount: '', unit: '' },
     adding: false,
+    init() { this.load(); },
     async load() {
       this.loading = true;
       try {

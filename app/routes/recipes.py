@@ -418,67 +418,6 @@ def delete_recipe(
     return None
 
 
-# ---- 点赞 ----
-@router.post("/{recipe_id}/like")
-def toggle_like(
-    recipe_id: int,
-    db: sqlite3.Connection = Depends(get_db),
-    user=Depends(get_current_user),
-):
-    if not db.execute("SELECT 1 FROM recipes WHERE id = ?", (recipe_id,)).fetchone():
-        raise HTTPException(status_code=404, detail="食谱不存在")
-    existed = db.execute(
-        "SELECT id FROM recipe_likes WHERE recipe_id = ? AND user_id = ?", (recipe_id, user["id"])
-    ).fetchone()
-    if existed:
-        db.execute("DELETE FROM recipe_likes WHERE id = ?", (existed["id"],))
-        liked = False
-    else:
-        db.execute("INSERT INTO recipe_likes (recipe_id, user_id) VALUES (?, ?)", (recipe_id, user["id"]))
-        liked = True
-    db.commit()
-    count = db.execute("SELECT COUNT(*) AS c FROM recipe_likes WHERE recipe_id = ?", (recipe_id,)).fetchone()["c"]
-    return {"liked": liked, "likes_count": count}
-
-
-# ---- 评论 ----
-@router.get("/{recipe_id}/comments")
-def list_comments(
-    recipe_id: int,
-    db: sqlite3.Connection = Depends(get_db),
-    user=Depends(get_current_user),
-):
-    rows = db.execute(
-        """
-        SELECT c.id, c.content, c.created_at, u.username, u.display_name, u.avatar
-        FROM recipe_comments c JOIN users u ON u.id = c.user_id
-        WHERE c.recipe_id = ? ORDER BY c.id DESC
-        """,
-        (recipe_id,),
-    ).fetchall()
-    return {"comments": [dict(r) for r in rows]}
-
-
-@router.post("/{recipe_id}/comments", status_code=201)
-def add_comment(
-    recipe_id: int,
-    body: models.CommentCreate,
-    db: sqlite3.Connection = Depends(get_db),
-    user=Depends(get_current_user),
-):
-    content = (body.content or "").strip()
-    if not content:
-        raise HTTPException(status_code=400, detail="评论内容不能为空")
-    if len(content) > 500:
-        raise HTTPException(status_code=400, detail="评论最长 500 字")
-    db.execute(
-        "INSERT INTO recipe_comments (recipe_id, user_id, content) VALUES (?, ?, ?)",
-        (recipe_id, user["id"], content),
-    )
-    db.commit()
-    return {"ok": True}
-
-
 # ---- 收藏/取消 ----
 @router.post("/{recipe_id}/favorite")
 def toggle_favorite(

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}家里剩啥 · 今天吃点啥{% endblock %}
+
+{% block content %}
+<div x-data="inventoryPage()" class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  <h1 class="fr-h1 mb-2">🧊 家里剩啥</h1>
+  <p class="fr-body text-muted-foreground mb-8">记下家里现有的食材，随机推荐时勾选「仅用现有食材」，只看手头能做的菜。</p>
+
+  <!-- 添加 -->
+  <div class="fr-card p-5 mb-6">
+    <div class="space-y-3">
+      <input type="text" x-model="form.name" @keydown.enter.prevent="add()" placeholder="食材名，如：鸡蛋" maxlength="50" class="fr-input w-full">
+      <div class="flex items-center gap-2">
+        <input type="text" x-model="form.amount" placeholder="数量" class="fr-input w-24">
+        <input type="text" x-model="form.unit" placeholder="单位" class="fr-input w-24">
+        <button @click="add()" :disabled="adding" class="fr-btn fr-btn-primary h-10 px-5 ml-auto">
+          <i data-lucide="plus" class="w-4 h-4"></i>
+          添加
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 列表 -->
+  <div class="fr-card p-5">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="fr-h2">现有食材 <span class="fr-caption text-muted-foreground" x-text="'(' + items.length + ')'"></span></h2>
+      <button @click="load()" class="fr-btn fr-btn-ghost h-9 px-3">
+        <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+      </button>
+    </div>
+    <div x-show="loading" class="py-8 text-center fr-caption text-muted-foreground">加载中…</div>
+    <div x-show="!loading && items.length === 0" class="py-10 text-center">
+      <div class="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
+        <i data-lucide="refrigerator" class="w-8 h-8 text-muted-foreground"></i>
+      </div>
+      <p class="fr-body text-muted-foreground">库存是空的，先添加几样食材吧</p>
+    </div>
+    <ul class="space-y-2">
+      <template x-for="(item, idx) in items" :key="'inv-' + idx">
+        <li class="flex items-center gap-3 p-3 rounded-xl bg-muted/50">
+          <div class="flex-1 min-w-0">
+            <p class="fr-body truncate" x-text="item.name"></p>
+            <p class="fr-caption text-muted-foreground" x-text="(item.amount || '') + (item.unit ? ' ' + item.unit : '')"></p>
+          </div>
+          <button @click="remove(item.id)" class="w-8 h-8 rounded-lg hover:bg-[var(--fr-state-error-soft)] hover:text-[var(--fr-state-error)] flex items-center justify-center text-muted-foreground">
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+          </button>
+        </li>
+      </template>
+    </ul>
+  </div>
+</div>
+{% endblock %}

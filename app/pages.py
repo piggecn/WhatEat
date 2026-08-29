@@ -242,17 +242,7 @@ def _get_recipe(conn, user_id: int, recipe_id: int) -> Optional[dict]:
     d["is_favorite"] = bool(d["is_favorite"])
     d["ingredients"] = ingredients
     d["steps"] = steps
-    d["likes_count"] = int(conn.execute(
-        "SELECT COUNT(*) AS c FROM recipe_likes WHERE recipe_id = ?", (recipe_id,)
-    ).fetchone()["c"] or 0)
-    d["is_liked"] = bool(conn.execute(
-        "SELECT 1 FROM recipe_likes WHERE recipe_id = ? AND user_id = ?", (recipe_id, user_id)
-    ).fetchone())
-    d["comments"] = [dict(c) for c in conn.execute(
-        "SELECT c.id, c.content, c.created_at, u.username, u.display_name, u.avatar "
-        "FROM recipe_comments c JOIN users u ON u.id = c.user_id "
-        "WHERE c.recipe_id = ? ORDER BY c.id DESC", (recipe_id,)
-    ).fetchall()]
+
     try:
         d["diet_tags"] = _j.loads(d.get("diet_tags") or "[]") or []
     except Exception:
@@ -410,6 +400,15 @@ def detail(request: Request, recipe_id: int, user=Depends(page_user)):
     return templates.TemplateResponse(request, "detail.html", {
         "current_user": user, "page": "detail",
         "recipe": recipe, "recipe_id": recipe_id,
+    })
+
+
+@router.get("/inventory", response_class=HTMLResponse)
+def inventory_page(request: Request, user=Depends(page_user)):
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    return templates.TemplateResponse(request, "inventory.html", {
+        "current_user": user, "page": "inventory",
     })
 
 

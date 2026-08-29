@@ -230,38 +230,5 @@
     <span x-text="mealToast"></span>
   </div>
 </div>
-      <!-- 点赞 + 家人点评 -->
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6" x-data="likeComment()" x-init="liked = {{ 'true' if recipe.is_liked else 'false' }}; likesCount = {{ recipe.likes_count }}; recipeId = '{{ recipe_id }}'">
-        <div class="flex items-center gap-3 mb-4">
-          <button type="button" @click="toggleLike()"
-                  :class="liked ? 'border-[var(--fr-primary)] bg-[var(--fr-primary-soft)] text-primary' : 'border-border bg-card text-muted-foreground hover:border-[var(--fr-primary)]'"
-                  class="rounded-full border px-5 py-2.5 flex items-center gap-2 fr-body transition-colors">
-            <i data-lucide="thumbs-up" class="w-4 h-4"></i>
-            <span x-text="liked ? '已赞' : '点赞'"></span>
-            <span class="fr-caption" x-text="likesCount"></span>
-          </button>
-          <p class="fr-caption text-muted-foreground">家人的点赞和点评会展示在这里</p>
-        </div>
-        <div class="fr-card p-5">
-          <h3 class="fr-h2 mb-4">家人点评 <span class="fr-caption text-muted-foreground" x-text="'(' + comments.length + ')'"></span></h3>
-          <div class="flex items-center gap-3 mb-4">
-            <input type="text" x-model="draft" @keydown.enter.prevent="submitComment()" placeholder="说点什么，如：孩子最爱这道～" maxlength="500" class="fr-input flex-1">
-            <button type="button" @click="submitComment()" :disabled="sending" class="fr-btn fr-btn-primary h-10 px-5">发表</button>
-          </div>
-          <div x-show="comments.length === 0" class="fr-caption text-muted-foreground py-4 text-center">还没有点评，来做第一个吧</div>
-          <ul class="space-y-3">
-            <template x-for="(c, ci) in comments" :key="'cm-' + c.id">
-              <li class="flex items-start gap-3 p-3 rounded-xl bg-muted/50">
-                <span class="w-8 h-8 rounded-full bg-primary/15 text-primary flex items-center justify-center fr-caption shrink-0" x-text="(c.display_name || c.username || '?').slice(0, 1)"></span>
-                <div class="flex-1">
-                  <p class="fr-caption font-medium" x-text="c.display_name || c.username"></p>
-                  <p class="fr-body" x-text="c.content"></p>
-                  <p class="fr-caption text-muted-foreground" x-text="(c.created_at || '').slice(0, 10)"></p>
-                </div>
-              </li>
-            </template>
-          </ul>
-        </div>
-      </div>
 
 {% endblock %}
