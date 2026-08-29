@@ -222,16 +222,18 @@
   <section class="border-b border-border bg-card">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
       <div class="flex flex-col lg:flex-row lg:items-center gap-4 lg:gap-6">
-        <div class="relative flex-1 max-w-xl">
-          <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground"></i>
-          <input type="text" x-model="q" @keydown.enter="applyFilter()" placeholder="搜索菜谱、食材或作者…" class="fr-input w-full pl-10" value="{{ current_q }}">
-        <div x-show="searchHist.length > 0" class="flex flex-wrap items-center gap-2 mt-2">
-          <span class="fr-caption text-muted-foreground">最近搜索</span>
-          <template x-for="(h, hi) in searchHist" :key="'h-' + hi">
-            <button type="button" @click="q = h; applyFilter()" class="fr-tag hover:border-[var(--fr-primary)] transition-colors" x-text="h"></button>
-          </template>
-          <button type="button" @click="clearSearchHistory()" class="fr-caption text-muted-foreground hover:text-[var(--fr-state-error)]">清空</button>
-        </div>
+        <div class="flex-1 max-w-xl">
+          <div class="relative">
+            <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground"></i>
+            <input type="text" x-model="q" @keydown.enter="applyFilter()" placeholder="搜索菜谱、食材或作者…" class="fr-input w-full pl-10" value="{{ current_q }}">
+          </div>
+          <div x-show="searchHist.length > 0" class="flex flex-wrap items-center gap-2 mt-2">
+            <span class="fr-caption text-muted-foreground">最近搜索</span>
+            <template x-for="(h, hi) in searchHist" :key="'h-' + hi">
+              <button type="button" @click="q = h; applyFilter()" class="fr-tag hover:border-[var(--fr-primary)] transition-colors" x-text="h"></button>
+            </template>
+            <button type="button" @click="clearSearchHistory()" class="fr-caption text-muted-foreground hover:text-[var(--fr-state-error)]">清空</button>
+          </div>
         </div>
         <div class="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 lg:pb-0">
           <button @click="selectCategory('')" :class="category === '' ? 'fr-tag' : 'fr-tag fr-tag-neutral'" class="whitespace-nowrap">全部</button>
