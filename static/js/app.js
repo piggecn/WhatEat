@@ -1987,7 +1987,7 @@ function calendarPage() {
       const mealTypes = ['breakfast', 'lunch', 'dinner'];
       for (const day of this.weekDays) {
         for (const mt of mealTypes) {
-          if (!day[mt]) {
+          if (!day[mt] || !day[mt].length) {
             try {
               const params = new URLSearchParams();
               params.set('meal_type', mt);

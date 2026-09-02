@@ -41,5 +41,13 @@ _check_settings.py
 _probe_*.py
 _test_*.py
 
-# 源码目录（不要上传）
+# 其他仓库目录（不要上传）
 d:/git/源码/
+d:/git/what-to-eat-today/
+
+# Flutter mobile（工程只在 git 副本内，构建产物不入库）
+mobile/build/
+mobile/.gradle-home/
+mobile/.dart_tool/
+mobile/android/.gradle/
+mobile/android/local.properties
