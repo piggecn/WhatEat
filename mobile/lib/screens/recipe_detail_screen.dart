@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../models/recipe.dart';
 import '../services/api_client.dart';
@@ -32,6 +34,29 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
   bool _togglingFavorite = false;
   int? _currentUserId;
   bool _isAdmin = false;
+  final Set<int> _checkedIngredients = {};
+  bool _showAltUnit = false;
+
+  // 与服务端 convert_amount 同规则：克→两(÷50)、毫升→汤匙(÷15)、斤→公斤(÷2)
+  static const _unitConv = {
+    '克': ('两', 50.0),
+    '毫升': ('汤匙', 15.0),
+    '斤': ('公斤', 2.0),
+  };
+
+  String? _altAmountText(Ingredient ing) {
+    final amount = ing.amount;
+    final unit = ing.unit;
+    if (amount == null || amount.trim().isEmpty || unit == null) return null;
+    final v = double.tryParse(amount.trim());
+    final pair = _unitConv[unit];
+    if (v == null || pair == null) return null;
+    final val = v / pair.$2;
+    final text = (val - val.roundToDouble()).abs() < 1e-9
+        ? '${val.round()}'
+        : val.toStringAsFixed(1);
+    return '$text${pair.$1}';
+  }
 
   @override
   void initState() {
@@ -237,6 +262,60 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
     return parts.join(' · ');
   }
 
+  /// 拼 Web 端同格式的分享文本（_buildShareText）
+  String _buildShareText(Recipe r) {
+    final lines = <String>[];
+    lines.add('【${r.title}】');
+    if (r.description != null && r.description!.isNotEmpty) {
+      lines.add(r.description!);
+    }
+    final meta = <String>[];
+    if (r.category != null && r.category!.isNotEmpty) meta.add('分类：${r.category}');
+    if (r.servings > 0) meta.add('人数：${r.servings} 人份');
+    if (r.prepTime != null) meta.add('准备：${r.prepTime} 分钟');
+    if (r.cookTime != null) meta.add('烹饪：${r.cookTime} 分钟');
+    final author = r.authorDisplayName ?? r.author;
+    if (author != null && author.isNotEmpty) meta.add('作者：$author');
+    if (meta.isNotEmpty) lines.add(meta.join(' | '));
+    lines.add('');
+    lines.add('食材清单');
+    for (var i = 0; i < r.ingredients.length; i++) {
+      final ing = r.ingredients[i];
+      final qty = [
+        if (ing.amount != null && ing.amount!.isNotEmpty) ing.amount!,
+        if (ing.unit != null && ing.unit!.isNotEmpty) ing.unit!,
+      ].join(' ');
+      lines.add('${i + 1}. ${ing.name}${qty.isNotEmpty ? ' $qty' : ''}');
+    }
+    lines.add('');
+    lines.add('烹饪步骤');
+    for (var i = 0; i < r.steps.length; i++) {
+      lines.add('${i + 1}. ${r.steps[i].description}');
+    }
+    return lines.join('\n');
+  }
+
+  Future<void> _copyRecipe() async {
+    final recipe = _recipe;
+    if (recipe == null) return;
+    await Clipboard.setData(ClipboardData(text: _buildShareText(recipe)));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('菜谱已复制，去分享吧')));
+  }
+
+  Future<void> _shareRecipe() async {
+    final recipe = _recipe;
+    if (recipe == null) return;
+    try {
+      await SharePlus.instance.share(
+        ShareParams(text: _buildShareText(recipe), subject: recipe.title),
+      );
+    } catch (_) {
+      // 用户取消分享等场景无需提示
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -244,6 +323,18 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
       appBar: AppBar(
         title: Text(_recipe?.title ?? '菜谱详情'),
         actions: [
+          if (_recipe != null)
+            IconButton(
+              tooltip: '复制菜谱',
+              onPressed: _copyRecipe,
+              icon: const Icon(Icons.copy_outlined),
+            ),
+          if (_recipe != null)
+            IconButton(
+              tooltip: '分享',
+              onPressed: _shareRecipe,
+              icon: const Icon(Icons.share_outlined),
+            ),
           if (_recipe != null)
             IconButton(
               tooltip: _favorite ? '取消收藏' : '收藏',
@@ -457,47 +548,96 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
               ],
               if (recipe.ingredients.isNotEmpty) ...[
                 const SizedBox(height: 24),
-                _SectionTitle(
-                  title: '食材清单',
-                  icon: Icons.shopping_basket_outlined,
+                Row(
+                  children: [
+                    const _SectionTitle(
+                      title: '食材清单',
+                      icon: Icons.shopping_basket_outlined,
+                    ),
+                    const Spacer(),
+                    TextButton.icon(
+                      onPressed: () =>
+                          setState(() => _showAltUnit = !_showAltUnit),
+                      icon: Icon(
+                        _showAltUnit ? Icons.swap_horiz : Icons.swap_horiz,
+                        size: 16,
+                      ),
+                      label: Text(_showAltUnit ? '原始单位' : '常用换算'),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 8),
-                ...recipe.ingredients.map(
-                  (ing) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Padding(
-                          padding: EdgeInsets.only(top: 8),
-                          child: Icon(
-                            Icons.circle,
-                            size: 6,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            ing.name,
-                            style: AppTypography.body.copyWith(
-                              color: theme.colorScheme.onSurface,
-                            ),
-                          ),
-                        ),
-                        if (ing.amount != null || ing.unit != null)
-                          Text(
-                            [
-                              ing.amount,
-                              ing.unit,
-                            ].where((e) => e != null && e.isNotEmpty).join(' '),
-                            style: AppTypography.body.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
+                ...recipe.ingredients.asMap().entries.map(
+                  (entry) {
+                    final index = entry.key;
+                    final ing = entry.value;
+                    final checked = _checkedIngredients.contains(index);
+                    final amountText = [
+                      if (_showAltUnit && _altAmountText(ing) != null)
+                        _altAmountText(ing)!
+                      else ...[
+                        if (ing.amount != null && ing.amount!.isNotEmpty)
+                          ing.amount!,
+                        if (ing.unit != null && ing.unit!.isNotEmpty) ing.unit!,
                       ],
-                    ),
-                  ),
+                    ].join(' ');
+                    return InkWell(
+                      onTap: () => setState(() {
+                        if (!_checkedIngredients.remove(index)) {
+                          _checkedIngredients.add(index);
+                        }
+                      }),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Icon(
+                                checked
+                                    ? Icons.check_box
+                                    : Icons.check_box_outline_blank,
+                                size: 20,
+                                color: checked
+                                    ? theme.colorScheme.onSurfaceVariant
+                                    : AppColors.primary,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                ing.name,
+                                style: AppTypography.body.copyWith(
+                                  color: checked
+                                      ? theme.colorScheme.onSurfaceVariant
+                                      : theme.colorScheme.onSurface,
+                                  decoration: checked
+                                      ? TextDecoration.lineThrough
+                                      : null,
+                                ),
+                              ),
+                            ),
+                            if (amountText.isNotEmpty)
+                              Text(
+                                amountText,
+                                style: AppTypography.body.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                  decoration: checked
+                                      ? TextDecoration.lineThrough
+                                      : null,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ],
               if (recipe.steps.isNotEmpty) ...[
