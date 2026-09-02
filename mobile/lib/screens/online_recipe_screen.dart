@@ -22,6 +22,7 @@ class _OnlineRecipeScreenState extends State<OnlineRecipeScreen> {
   bool _searched = false;
   String? _error;
   String _zhKeyword = '';
+  String _source = 'themealdb';
   List<Map<String, dynamic>> _results = [];
   int _preparingIndex = -1;
 
@@ -42,7 +43,8 @@ class _OnlineRecipeScreenState extends State<OnlineRecipeScreen> {
       _zhKeyword = '';
     });
     try {
-      final (items, _, zhKeyword) = await widget.api.searchOnlineRecipe(keyword);
+      final (items, _, zhKeyword) =
+          await widget.api.searchOnlineRecipe(keyword, source: _source);
       if (!mounted) return;
       setState(() {
         _results = items;
@@ -80,6 +82,7 @@ class _OnlineRecipeScreenState extends State<OnlineRecipeScreen> {
         'thumb': item['thumb'],
         'ingredients': item['ingredients'] ?? const [],
         'steps': item['steps'] ?? const [],
+        'source': _source,
       });
       if (!mounted) return;
       final draft = RecipeDraft.fromPrepare(prepared);
@@ -127,6 +130,28 @@ class _OnlineRecipeScreenState extends State<OnlineRecipeScreen> {
                     onPressed: _search,
                   ),
                 ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(
+                    value: 'themealdb',
+                    label: Text('TheMealDB'),
+                    icon: Icon(Icons.public),
+                  ),
+                  ButtonSegment(
+                    value: 'howtocook',
+                    label: Text('中文菜谱库'),
+                    icon: Icon(Icons.menu_book),
+                  ),
+                ],
+                selected: {_source},
+                onSelectionChanged: (s) {
+                  setState(() => _source = s.first);
+                  if (_controller.text.trim().isNotEmpty) _search();
+                },
               ),
             ),
             if (_zhKeyword.isNotEmpty && _zhKeyword != _controller.text.trim())

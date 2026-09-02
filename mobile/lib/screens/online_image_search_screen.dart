@@ -29,7 +29,14 @@ class _OnlineImageSearchScreenState extends State<OnlineImageSearchScreen> {
   List<Map<String, dynamic>> _results = [];
   int _page = 0;
   String _keyword = '';
+  String _provider = 'pixabay';
   static const _perPage = 12;
+
+  static const _providers = {
+    'pixabay': 'Pixabay',
+    'pixabay_zh': 'Pixabay 中文',
+    'wikimedia': 'Wikimedia',
+  };
 
   @override
   void initState() {
@@ -72,6 +79,7 @@ class _OnlineImageSearchScreenState extends State<OnlineImageSearchScreen> {
         keyword: keyword,
         page: 1,
         perPage: _perPage,
+        provider: _provider,
       );
       if (!mounted) return;
       setState(() {
@@ -98,6 +106,7 @@ class _OnlineImageSearchScreenState extends State<OnlineImageSearchScreen> {
         keyword: _keyword,
         page: _page + 1,
         perPage: _perPage,
+        provider: _provider,
       );
       if (!mounted) return;
       setState(() {
@@ -132,6 +141,41 @@ class _OnlineImageSearchScreenState extends State<OnlineImageSearchScreen> {
                     onPressed: _search,
                   ),
                 ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Row(
+                children: [
+                  Text('渠道：',
+                      style: AppTypography.caption.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      )),
+                  Expanded(
+                    child: Wrap(
+                      spacing: 8,
+                      children: [
+                        for (final entry in _providers.entries)
+                          ChoiceChip(
+                            label: Text(entry.value),
+                            selected: _provider == entry.key,
+                            onSelected: (_) {
+                              setState(() => _provider = entry.key);
+                              if (_controller.text.trim().isNotEmpty) {
+                                _search();
+                              }
+                            },
+                          ),
+                      ],
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: _pickManualUrl,
+                    icon: const Icon(Icons.edit_location_alt_outlined,
+                        size: 16),
+                    label: const Text('手动输链接'),
+                  ),
+                ],
               ),
             ),
             Expanded(
@@ -169,6 +213,37 @@ class _OnlineImageSearchScreenState extends State<OnlineImageSearchScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _pickManualUrl() async {
+    final controller = TextEditingController();
+    final url = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('手动输入图片链接'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: TextInputType.url,
+          decoration: const InputDecoration(
+              hintText: 'https://...（jpg/png/webp）'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(controller.text.trim()),
+            child: const Text('使用'),
+          ),
+        ],
+      ),
+    );
+    if (url != null && url.startsWith('http') && mounted) {
+      Navigator.of(context).pop(url);
+    }
   }
 
   Widget _buildGrid() {

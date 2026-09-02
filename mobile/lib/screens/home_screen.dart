@@ -11,6 +11,7 @@ import '../widgets/state_views.dart';
 import 'online_recipe_screen.dart';
 import 'paste_import_screen.dart';
 import 'recipe_detail_screen.dart';
+import 'url_import_screen.dart';
 import 'recipe_edit_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -239,6 +240,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 onTap: () => Navigator.of(context).pop('online'),
               ),
               ListTile(
+                leading: const Icon(Icons.link),
+                title: const Text('链接导入'),
+                subtitle: const Text('粘贴豆果等菜谱网页链接'),
+                onTap: () => Navigator.of(context).pop('url'),
+              ),
+              ListTile(
                 leading: const Icon(Icons.content_paste),
                 title: const Text('粘贴文本导入'),
                 subtitle: const Text('解析小红书、备忘录等分享的文本'),
@@ -255,6 +262,7 @@ class _HomeScreenState extends State<HomeScreen> {
       MaterialPageRoute(
         builder: (_) => switch (action) {
           'online' => OnlineRecipeScreen(api: widget.api),
+          'url' => UrlImportScreen(api: widget.api),
           'paste' => PasteImportScreen(api: widget.api),
           _ => RecipeEditScreen(api: widget.api),
         },

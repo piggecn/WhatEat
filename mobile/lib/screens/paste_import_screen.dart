@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../models/recipe_draft.dart';
 import '../services/api_client.dart';
@@ -22,6 +23,7 @@ class PasteImportScreen extends StatefulWidget {
 class _PasteImportScreenState extends State<PasteImportScreen> {
   final _controller = TextEditingController();
   bool _parsing = false;
+  bool _ocr = false;
   RecipeDraft? _draft;
 
   @override
@@ -37,6 +39,42 @@ class _PasteImportScreenState extends State<PasteImportScreen> {
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickAndOcr() async {
+    if (_ocr) return;
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.camera,
+      maxWidth: 1920,
+      imageQuality: 85,
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _ocr = true);
+    try {
+      final text = await widget.api.ocrImage(picked.path);
+      if (!mounted) return;
+      if (text.trim().isEmpty) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('没识别出文字，换张清晰点的试试')));
+        return;
+      }
+      setState(() {
+        _controller.text =
+            _controller.text.trim().isEmpty ? text : '${_controller.text.trim()}\n$text';
+      });
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('识别完成，已填入文本')));
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('识别失败，请重试')));
+    } finally {
+      if (mounted) setState(() => _ocr = false);
+    }
   }
 
   Future<void> _parse() async {
@@ -109,19 +147,37 @@ class _PasteImportScreenState extends State<PasteImportScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerRight,
-              child: FilledButton.icon(
-                onPressed: _parsing ? null : _parse,
-                icon: _parsing
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.auto_fix_high),
-                label: Text(_parsing ? '解析中…' : '解析文本'),
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _ocr ? null : _pickAndOcr,
+                    icon: _ocr
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.photo_camera_outlined),
+                    label: Text(_ocr ? '识别中…' : '拍照识别'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 2,
+                  child: FilledButton.icon(
+                    onPressed: _parsing ? null : _parse,
+                    icon: _parsing
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.auto_fix_high),
+                    label: Text(_parsing ? '解析中…' : '解析文本'),
+                  ),
+                ),
+              ],
             ),
             if (_draft != null) ...[
               const SizedBox(height: 20),

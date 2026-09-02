@@ -521,11 +521,15 @@ class ApiClient {
   }
 
   Future<(List<Map<String, dynamic>>, List<String>, String)> searchOnlineRecipe(
-    String keyword,
-  ) async {
+    String keyword, {
+    String? source,
+  }) async {
     final data = await _get(
       '/api/recipe-api/search',
-      query: {'keyword': keyword},
+      query: {
+        'keyword': keyword,
+        if (source != null && source.isNotEmpty) 'source': source,
+      },
     );
     final body = _asMap(data);
     return (
@@ -533,6 +537,22 @@ class ApiClient {
       _asStringList(body['en_queries']),
       body['zh_keyword'] as String? ?? '',
     );
+  }
+
+  /// 链接导入（豆果/JSON-LD 通用）：POST /api/recipe-api/fetch-url
+  Future<Map<String, dynamic>> fetchUrlImport(String url) async {
+    final data = await _post('/api/recipe-api/fetch-url', body: {'url': url});
+    return _asMap(data);
+  }
+
+  /// 拍照 OCR：POST /api/ocr（multipart image），返回识别文本
+  Future<String> ocrImage(String filePath) async {
+    final data = await _sendMultipart(
+      'POST',
+      '/api/ocr',
+      files: {'file': filePath},
+    );
+    return _asMap(data)['text'] as String? ?? '';
   }
 
   Future<(bool, String, List<String>)> translateKeyword(String keyword) async {
