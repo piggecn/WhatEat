@@ -17,12 +17,29 @@ class FavoritesScreen extends StatefulWidget {
 
 class _FavoritesScreenState extends State<FavoritesScreen> {
   final _scrollController = ScrollController();
+  final _searchController = TextEditingController();
   final List<Recipe> _recipes = [];
   bool _loading = true;
   bool _loadingMore = false;
   bool _hasMore = true;
   int _page = 1;
   String? _error;
+  String _filterQuery = '';
+  String? _filterCategory;
+
+  static const _categories = ['全部', '早餐', '午餐', '晚餐', '甜点', '小吃', '饮品'];
+
+  List<Recipe> get _visible {
+    final q = _filterQuery.trim();
+    return [
+      for (final r in _recipes)
+        if (q.isEmpty || r.title.contains(q))
+          if (_filterCategory == null ||
+              _filterCategory == '全部' ||
+              r.category == _filterCategory)
+            r,
+    ];
+  }
 
   @override
   void initState() {
@@ -34,6 +51,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   @override
   void dispose() {
     _scrollController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -126,49 +144,108 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         subtitle: '在菜谱卡片或详情页点爱心即可收藏',
       );
     }
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: CustomScrollView(
-        controller: _scrollController,
-        physics: const AlwaysScrollableScrollPhysics(),
-        slivers: [
-          SliverPadding(
-            padding: const EdgeInsets.all(16),
-            sliver: SliverGrid(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childAspectRatio: 0.68,
-              ),
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final recipe = _recipes[index];
-                  return RecipeCard(
-                    recipe: recipe,
-                    api: widget.api,
-                    onTap: () => _openDetail(recipe),
-                    onFavoriteChanged: (now) {
-                      if (!now) {
-                        setState(() => _recipes.removeWhere(
-                            (r) => r.id == recipe.id));
-                      }
-                    },
-                  );
-                },
-                childCount: _recipes.length,
-              ),
+    final visible = _visible;
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: TextField(
+            controller: _searchController,
+            onChanged: (v) => setState(() => _filterQuery = v),
+            textInputAction: TextInputAction.search,
+            decoration: InputDecoration(
+              hintText: '搜索收藏的菜谱',
+              prefixIcon: const Icon(Icons.search),
+              isDense: true,
+              suffixIcon: _filterQuery.isEmpty
+                  ? null
+                  : IconButton(
+                      icon: const Icon(Icons.clear, size: 18),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => _filterQuery = '');
+                      },
+                    ),
             ),
           ),
-          if (_loadingMore)
-            const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: Center(child: CircularProgressIndicator()),
-              ),
-            ),
-        ],
-      ),
+        ),
+        SizedBox(
+          height: 40,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            itemCount: _categories.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 8),
+            itemBuilder: (context, index) {
+              final category = _categories[index];
+              final selected = category == '全部'
+                  ? _filterCategory == null
+                  : _filterCategory == category;
+              return ChoiceChip(
+                label: Text(category),
+                selected: selected,
+                onSelected: (_) => setState(() =>
+                    _filterCategory = category == '全部' ? null : category),
+                selectedColor:
+                    Theme.of(context).colorScheme.primary.withAlpha(40),
+              );
+            },
+          ),
+        ),
+        Expanded(
+          child: visible.isEmpty
+              ? const EmptyState(
+                  icon: Icons.search_off,
+                  title: '没有匹配的收藏',
+                )
+              : RefreshIndicator(
+                  onRefresh: _load,
+                  child: CustomScrollView(
+                    controller: _scrollController,
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    slivers: [
+                      SliverPadding(
+                        padding: const EdgeInsets.all(16),
+                        sliver: SliverGrid(
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            mainAxisSpacing: 12,
+                            crossAxisSpacing: 12,
+                            childAspectRatio: 0.68,
+                          ),
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                              final recipe = visible[index];
+                              return RecipeCard(
+                                recipe: recipe,
+                                api: widget.api,
+                                onTap: () => _openDetail(recipe),
+                                onFavoriteChanged: (now) {
+                                  if (!now) {
+                                    setState(() => _recipes.removeWhere(
+                                        (r) => r.id == recipe.id));
+                                  }
+                                },
+                              );
+                            },
+                            childCount: visible.length,
+                          ),
+                        ),
+                      ),
+                      if (_loadingMore)
+                        const SliverToBoxAdapter(
+                          child: Padding(
+                            padding: EdgeInsets.all(16),
+                            child:
+                                Center(child: CircularProgressIndicator()),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+        ),
+      ],
     );
   }
 }

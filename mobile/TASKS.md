@@ -229,21 +229,21 @@
 
 ### P1 导入补齐
 
-- [ ] **T9.11** 链接导入：`POST /api/recipe-api/fetch-url`（豆果等），并入发布入口
-- [ ] **T9.12** 粘贴导入加拍照 OCR（`POST /api/ocr`，image_picker 已有）
-- [ ] **T9.13** 在线菜谱 source 切换（TheMealDB/中文菜谱库）+ 中英关键词切换 + **prepare/search 补传 source（修 howtocook 结果被误英转中的 bug）**
-- [ ] **T9.14** 图片搜索渠道切换（pixabay/pixabay_zh/wikimedia）+ 手动输 URL
+- [x] **T9.11** 链接导入：`POST /api/recipe-api/fetch-url`（豆果等），并入发布入口
+- [x] **T9.12** 粘贴导入加拍照 OCR（`POST /api/ocr`，image_picker 已有）
+- [x] **T9.13** 在线菜谱 source 切换（TheMealDB/中文菜谱库）+ 中英关键词切换 + **prepare/search 补传 source（修 howtocook 结果被误英转中的 bug）**
+- [x] **T9.14** 图片搜索渠道切换（pixabay/pixabay_zh/wikimedia）+ 手动输 URL
 
 ### P2 首页/收藏体验
 
-- [ ] **T9.15** 搜索关键词高亮（TextSpan）+ 搜索历史（SharedPreferences 8 条）
-- [ ] **T9.16** 列表排序（created_desc/cook_time/alpha）+ 收藏页筛选
-- [ ] **T9.17** 轮播自动播放（4s，交互暂停）+ 时令提示条（按月份四季文案）
-- [ ] **T9.18** 个人中心：头像上传+预设 emoji、轮播设置补 favorites 项+滑条
+- [x] **T9.15** 搜索关键词高亮（TextSpan）+ 搜索历史（SharedPreferences 8 条）
+- [x] **T9.16** 列表排序（created_desc/cook_time/alpha）+ 收藏页筛选
+- [x] **T9.17** 轮播自动播放（4s，交互暂停）+ 时令提示条（按月份四季文案）
+- [x] **T9.18** 个人中心：头像上传+预设 emoji、轮播设置补 favorites 项+滑条
 
 ### P2 收尾
 
-- [ ] **T9.19** 删除死代码 `recipe_list_screen.dart`
-- [ ] **T9.20** 模拟器 E2E 冒烟 + 构建正式 APK
+- [x] **T9.19** 删除死代码 `recipe_list_screen.dart`
+- [x] **T9.20** 模拟器 E2E 冒烟 + 构建正式 APK
 
 依赖：T9.1 → T9.2/T9.3/T9.4；T9.5/T9.6 同批（随机联动）；T9.8 依赖 T9.7；其余独立。

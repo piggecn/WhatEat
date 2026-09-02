@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/meal.dart';
 import '../models/recipe.dart';
@@ -40,6 +43,10 @@ class _HomeScreenState extends State<HomeScreen> {
   int _page = 1;
   String _query = '';
   String? _category;
+  String _sort = 'created_desc';
+  List<String> _searchHistory = [];
+  bool _showHistory = false;
+  Timer? _carouselTimer;
 
   String get _today {
     final now = DateTime.now();
@@ -51,13 +58,70 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _scrollController.addListener(_onScroll);
     _loadInitial();
+    _loadSearchHistory();
+    _startCarouselTimer();
   }
 
   @override
   void dispose() {
+    _carouselTimer?.cancel();
     _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  // ---------- 搜索历史（本地 SharedPreferences，最多 8 条，对齐网页端） ----------
+
+  static const _historyKey = 'search_history';
+
+  Future<void> _loadSearchHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _searchHistory = prefs.getStringList(_historyKey) ?? const [];
+    });
+  }
+
+  Future<void> _pushSearchHistory(String q) async {
+    final query = q.trim();
+    if (query.isEmpty) return;
+    final next = [
+      query,
+      ..._searchHistory.where((e) => e != query),
+    ].take(8).toList();
+    setState(() => _searchHistory = next);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_historyKey, next);
+  }
+
+  Future<void> _clearSearchHistory() async {
+    setState(() => _searchHistory = []);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_historyKey);
+  }
+
+  // ---------- 轮播自动播放（4s，触摸暂停后自动重启，对齐网页端） ----------
+
+  void _startCarouselTimer() {
+    _carouselTimer?.cancel();
+    if (_carousel.length > 1) {
+      _carouselTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+        if (!mounted || _carousel.length < 2) return;
+        final next = (_carouselIndex + 1) % _carousel.length;
+        _carouselController.animateToPage(
+          next,
+          duration: const Duration(milliseconds: 420),
+          curve: Curves.easeOutCubic,
+        );
+      });
+    }
+  }
+
+  void _pauseCarouselTemporarily() {
+    _carouselTimer?.cancel();
+    Future.delayed(const Duration(seconds: 8), () {
+      if (mounted) _startCarouselTimer();
+    });
   }
 
   void _onScroll() {
@@ -84,6 +148,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _carousel = items;
         _carouselIndex = 0;
       });
+      _startCarouselTimer();
     } catch (_) {
       if (!mounted) return;
       setState(() => _carousel = []);
@@ -104,6 +169,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _hasMore = result.$2;
         _page = 1;
       });
+      _sortRecipes();
     } catch (_) {
       if (!mounted) return;
       setState(() => _recipes = []);
@@ -126,6 +192,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _hasMore = result.$2;
         _page += 1;
       });
+      _sortRecipes();
     } catch (_) {
       if (!mounted) return;
       setState(() => _hasMore = false);
@@ -145,6 +212,20 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  /// 客户端排序：最新（默认）/ 烹饪时间 / 名称（API 无 sort 参数，对已加载列表排序）
+  void _sortRecipes() {
+    switch (_sort) {
+      case 'cook_time':
+        _recipes.sort((a, b) =>
+            ((a.prepTime ?? 0) + (a.cookTime ?? 0)) -
+            ((b.prepTime ?? 0) + (b.cookTime ?? 0)));
+      case 'alpha':
+        _recipes.sort((a, b) => a.title.compareTo(b.title));
+      default:
+        break;
+    }
+  }
+
   void _selectCategory(String? category) {
     setState(() {
       _category = category == '全部' ? null : category;
@@ -153,7 +234,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _search(String value) {
-    setState(() => _query = value);
+    setState(() {
+      _query = value;
+      _showHistory = false;
+    });
+    _pushSearchHistory(value);
     _loadRecipes();
   }
 
@@ -319,6 +404,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             api: widget.api,
                             onTap: () => _openDetail(recipe),
                             onFavoriteChanged: (_) => _loadRecipes(),
+                            highlight: _query,
                           );
                         }, childCount: _recipes.length),
                       ),
@@ -340,13 +426,14 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildCarousel() {
     return Column(
       children: [
-        SizedBox(
-          height: 160,
-          child: PageView.builder(
+        Listener(
+          onPointerDown: (_) => _pauseCarouselTemporarily(),
+          child: SizedBox(
+            height: 160,
+            child: PageView.builder(
             controller: _carouselController,
             itemCount: _carousel.length,
-            onPageChanged: (index) => setState(() => _carouselIndex = index),
-            itemBuilder: (context, index) {
+            onPageChanged: (index) => setState(() => _carouselIndex = index),            itemBuilder: (context, index) {
               final item = _carousel[index];
               return Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -420,6 +507,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               );
             },
+          ),
           ),
         ),
         if (_carousel.length > 1)
@@ -539,6 +627,11 @@ class _HomeScreenState extends State<HomeScreen> {
             controller: _searchController,
             onSubmitted: _search,
             textInputAction: TextInputAction.search,
+            onTap: () {
+              if (_searchController.text.isEmpty && _searchHistory.isNotEmpty) {
+                setState(() => _showHistory = true);
+              }
+            },
             decoration: InputDecoration(
               hintText: '搜索菜谱',
               prefixIcon: const Icon(Icons.search),
@@ -553,26 +646,94 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
             ),
           ),
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 32,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: _categories.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 8),
-              itemBuilder: (context, index) {
-                final category = _categories[index];
-                final selected =
-                    (category == '全部' && _category == null) ||
-                    _category == category;
-                return ChoiceChip(
-                  label: Text(category),
-                  selected: selected,
-                  onSelected: (_) => _selectCategory(category),
-                  selectedColor: theme.colorScheme.primary.withAlpha(40),
-                );
-              },
+          if (_showHistory && _searchHistory.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Text('最近搜索',
+                    style: AppTypography.caption.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    )),
+                const Spacer(),
+                TextButton(
+                  onPressed: _clearSearchHistory,
+                  style: TextButton.styleFrom(
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                  child: const Text('清空'),
+                ),
+              ],
             ),
+            SizedBox(
+              height: 32,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: _searchHistory.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 8),
+                itemBuilder: (context, index) {
+                  final q = _searchHistory[index];
+                  return ActionChip(
+                    label: Text(q),
+                    labelStyle: AppTypography.caption,
+                    onPressed: () {
+                      _searchController.text = q;
+                      _search(q);
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 32,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _categories.length,
+                    separatorBuilder: (_, _) => const SizedBox(width: 8),
+                    itemBuilder: (context, index) {
+                      final category = _categories[index];
+                      final selected =
+                          (category == '全部' && _category == null) ||
+                          _category == category;
+                      return ChoiceChip(
+                        label: Text(category),
+                        selected: selected,
+                        onSelected: (_) => _selectCategory(category),
+                        selectedColor:
+                            theme.colorScheme.primary.withAlpha(40),
+                      );
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              DropdownButton<String>(
+                value: _sort,
+                underline: const SizedBox.shrink(),
+                style: AppTypography.caption.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                items: const [
+                  DropdownMenuItem(
+                      value: 'created_desc', child: Text('最新')),
+                  DropdownMenuItem(value: 'cook_time', child: Text('最快上桌')),
+                  DropdownMenuItem(value: 'alpha', child: Text('名称')),
+                ],
+                onChanged: (v) {
+                  if (v == null || v == _sort) return;
+                  setState(() {
+                    _sort = v;
+                    _sortRecipes();
+                  });
+                },
+              ),
+            ],
           ),
         ],
       ),
@@ -661,6 +822,21 @@ class _RandomSheetState extends State<_RandomSheet> {
     }
   }
 
+  /// 时令提示（对齐网页端 seasonTip：按当前月份给四季文案）
+  (String, IconData) get _seasonTip {
+    final m = DateTime.now().month;
+    if (m == 12 || m <= 2) {
+      return ('冬季时令：宜汤类·炖菜，暖身驱寒', Icons.soup_kitchen_outlined);
+    }
+    if (m <= 5) {
+      return ('春季时令：宜清淡时蔬，清爽开胃', Icons.local_florist_outlined);
+    }
+    if (m <= 8) {
+      return ('夏季时令：宜凉菜·冷面，消暑爽口', Icons.wb_sunny_outlined);
+    }
+    return ('秋季时令：宜滋补炖品，润燥养人', Icons.air);
+  }
+
   Future<void> _confirm() async {
     final recipe = _recipe;
     if (recipe == null || _confirming) return;
@@ -741,6 +917,10 @@ class _RandomSheetState extends State<_RandomSheet> {
                 ],
               ),
             ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: _buildSeasonBanner(theme),
+            ),
             Flexible(child: SingleChildScrollView(child: _buildBody(theme))),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
@@ -748,6 +928,31 @@ class _RandomSheetState extends State<_RandomSheet> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildSeasonBanner(ThemeData theme) {
+    final (text, icon) = _seasonTip;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.primarySoft,
+        borderRadius: BorderRadius.circular(AppRadius.medium),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: AppColors.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: AppTypography.caption.copyWith(
+                color: AppColors.primary,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

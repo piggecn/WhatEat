@@ -12,6 +12,7 @@ class RecipeCard extends StatefulWidget {
   final ApiClient api;
   final VoidCallback? onTap;
   final ValueChanged<bool>? onFavoriteChanged;
+  final String? highlight;
 
   const RecipeCard({
     super.key,
@@ -19,6 +20,7 @@ class RecipeCard extends StatefulWidget {
     required this.api,
     this.onTap,
     this.onFavoriteChanged,
+    this.highlight,
   });
 
   @override
@@ -127,13 +129,7 @@ class _RecipeCardState extends State<RecipeCard> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    widget.recipe.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.h3
-                        .copyWith(color: theme.colorScheme.onSurface),
-                  ),
+                  _buildTitle(theme),
                   if (category != null || time != null) ...[
                     const SizedBox(height: 8),
                     Row(
@@ -185,6 +181,45 @@ class _RecipeCardState extends State<RecipeCard> {
           ],
         ),
       ),
+    );
+  }
+
+  /// 搜索关键词高亮标题（对齐网页端 <mark> 效果）
+  Widget _buildTitle(ThemeData theme) {
+    final title = widget.recipe.title;
+    final base = AppTypography.h3
+        .copyWith(color: theme.colorScheme.onSurface);
+    final query = widget.highlight?.trim() ?? '';
+    if (query.isEmpty || !title.contains(query)) {
+      return Text(title,
+          maxLines: 1, overflow: TextOverflow.ellipsis, style: base);
+    }
+    final spans = <TextSpan>[];
+    var start = 0;
+    while (true) {
+      final idx = title.indexOf(query, start);
+      if (idx < 0) {
+        spans.add(TextSpan(text: title.substring(start)));
+        break;
+      }
+      if (idx > start) {
+        spans.add(TextSpan(text: title.substring(start, idx)));
+      }
+      spans.add(TextSpan(
+        text: title.substring(idx, idx + query.length),
+        style: TextStyle(
+          backgroundColor: Colors.yellow.withAlpha(150),
+          color: theme.colorScheme.onSurface,
+          fontWeight: FontWeight.w600,
+        ),
+      ));
+      start = idx + query.length;
+      if (start >= title.length) break;
+    }
+    return RichText(
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      text: TextSpan(style: base, children: spans),
     );
   }
 
