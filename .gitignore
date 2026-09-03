@@ -51,3 +51,9 @@ mobile/.gradle-home/
 mobile/.dart_tool/
 mobile/android/.gradle/
 mobile/android/local.properties
+
+# Android WebView 壳构建产物与密钥不入库
+android/build/
+android/*.apk
+android/*.keystore
+android/*.idsig
