@@ -15,7 +15,7 @@ echo "[1/6] 编译资源"
 "$BT/aapt2.exe" compile --dir app/src/main/res -o build/compiled.zip
 "$BT/aapt2.exe" link -o build/base.apk -I "$PLATFORM" \
   --min-sdk-version 24 --target-sdk-version 34 \
-  --version-code 1 --version-name "0.0.4" \
+  --version-code 5 --version-name "0.0.5" \
   --manifest app/src/main/AndroidManifest.xml build/compiled.zip
 
 echo "[2/6] 编译 Java"

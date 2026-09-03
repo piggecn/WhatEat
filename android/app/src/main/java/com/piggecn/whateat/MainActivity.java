@@ -46,7 +46,7 @@ public class MainActivity extends Activity {
     // 当前版本：versionCode 供 Android 安装器比对；
     // CURRENT_VERSION_NAME 跟随 GitHub Release 的语义版本号（不带 v），用于更新检测
     private static final int CURRENT_VERSION_CODE = 1;
-    private static final String CURRENT_VERSION_NAME = "0.0.4";
+    private static final String CURRENT_VERSION_NAME = "0.0.5";
     static final String PREFS = "whateat_prefs";
     static final String KEY_BASE_URL = "base_url";
     private static final long UPDATE_CHECK_INTERVAL = 6 * 3600 * 1000L;
