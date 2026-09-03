@@ -43,8 +43,10 @@ import java.util.regex.Pattern;
 
 public class MainActivity extends Activity {
 
-    // 当前版本号（发新版时与 manifest 里的 versionCode 一起 +1）
+    // 当前版本：versionCode 供 Android 安装器比对；
+    // CURRENT_VERSION_NAME 跟随 GitHub Release 的语义版本号（不带 v），用于更新检测
     private static final int CURRENT_VERSION_CODE = 1;
+    private static final String CURRENT_VERSION_NAME = "0.0.4";
     static final String PREFS = "whateat_prefs";
     static final String KEY_BASE_URL = "base_url";
     private static final long UPDATE_CHECK_INTERVAL = 6 * 3600 * 1000L;
@@ -215,8 +217,9 @@ public class MainActivity extends Activity {
             @Override
             public void run() {
                 try {
+                    // 走服务端公开接口（内部查 GitHub Releases，30 分钟缓存，无 Key）
                     HttpURLConnection conn = (HttpURLConnection)
-                            new URL(baseUrl + "/static/apk/latest.json").openConnection();
+                            new URL(baseUrl + "/api/app/check").openConnection();
                     conn.setConnectTimeout(10000);
                     conn.setReadTimeout(10000);
                     conn.setRequestProperty("User-Agent", "Mozilla/5.0");
@@ -232,17 +235,36 @@ public class MainActivity extends Activity {
                     }
                     br.close();
                     final JSONObject json = new JSONObject(sb.toString());
-                    final int vc = json.optInt("versionCode", 0);
-                    final String vn = json.optString("versionName", "");
-                    final String url = json.optString("url", "");
-                    final String note = json.optString("note", "");
-                    if (vc <= CURRENT_VERSION_CODE) {
+                    final String latest = json.optString("version", "");
+                    final String notes = json.optString("notes", "");
+                    String apkUrl = "";
+                    org.json.JSONArray assets = json.optJSONArray("assets");
+                    if (assets != null) {
+                        for (int i = 0; i < assets.length(); i++) {
+                            JSONObject a = assets.optJSONObject(i);
+                            if (a == null) {
+                                continue;
+                            }
+                            String name = a.optString("name", "");
+                            if (name.equals("whateat.apk") || name.endsWith(".apk")) {
+                                apkUrl = a.optString("url", "");
+                                if (!apkUrl.isEmpty()) {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    // 两个条件同时满足才提示：GitHub 有更新版本 + 该 Release 挂了 APK
+                    if (apkUrl.isEmpty() || compareVersion(latest, CURRENT_VERSION_NAME) <= 0) {
                         return;
                     }
+                    final String url = apkUrl;
+                    final String note = notes.length() > 240
+                            ? notes.substring(0, 240) + "…" : notes;
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            promptUpdate(vn, url, note);
+                            promptUpdate(latest, url, note);
                         }
                     });
                 } catch (Exception ignored) {
@@ -250,6 +272,32 @@ public class MainActivity extends Activity {
                 }
             }
         }).start();
+    }
+
+    /** 语义版本比较：1 表示 a 更新，-1 表示 a 更旧，0 相同 */
+    static int compareVersion(String a, String b) {
+        String[] pa = a.split("\\.");
+        String[] pb = b.split("\\.");
+        int n = Math.max(pa.length, pb.length);
+        for (int i = 0; i < n; i++) {
+            int va = i < pa.length ? parseIntSafe(pa[i]) : 0;
+            int vb = i < pb.length ? parseIntSafe(pb[i]) : 0;
+            if (va > vb) {
+                return 1;
+            }
+            if (va < vb) {
+                return -1;
+            }
+        }
+        return 0;
+    }
+
+    private static int parseIntSafe(String s) {
+        try {
+            return Integer.parseInt(s.trim());
+        } catch (Exception e) {
+            return 0;
+        }
     }
 
     private void promptUpdate(final String versionName, final String url, final String note) {
